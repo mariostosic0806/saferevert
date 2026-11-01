@@ -1,967 +1,1645 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SafeRevert — Deterministic Shopify Bulk Price Scheduler & Free Recovery CSV Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- This page talks to no server: it loads nothing from elsewhere and its script cannot send data anywhere (connect-src falls back to 'none'). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'" />
+  <title>SafeRevert: schedule Shopify sales and restore original prices</title>
+  <meta name="description" content="Schedule a Shopify sale. SafeRevert saves each original price and compare-at price first, puts them back when the sale ends, and keeps prices you change." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="SafeRevert: schedule Shopify sales and restore original prices" />
+  <meta property="og:description" content="SafeRevert saves each variant's original price and compare-at price before a sale and puts them back when it ends. Prices you change during the sale are kept." />
+  <!-- og:image: add a real screenshot of the shipped app here once one exists (never a mockup). -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23008060'/%3E%3Ccircle cx='16' cy='16' r='10.5' fill='none' stroke='white' stroke-width='2'/%3E%3Ctext x='16' y='19.6' text-anchor='middle' font-family='Arial,sans-serif' font-size='9.5' font-weight='700' fill='white'%3ESR%3C/text%3E%3C/svg%3E" />
   <style>
     :root {
+      color-scheme: dark;
       --bg: #0b0f17;
-      --card: #131b2e;
-      --card-alt: #18233c;
-      --border: #263554;
+      --surface: #131b2e;
+      --surface-2: #18233c;
+      --field: #0d1424;
+      --line: #263554;
+      --line-strong: #364a72;
+      --field-border: #56709f;
       --text: #f1f5f9;
-      --muted: #94a3b8;
+      --text-soft: #d5dde8;
+      --muted: #a3b1c5;
       --accent: #10b981;
-      --accent-hover: #059669;
-      --warn: #f59e0b;
-      --danger: #ef4444;
-      --info: #3b82f6;
+      --accent-hover: #34d399;
+      --accent-text: #6ee7b7;
+      --on-accent: #04130d;
+      --link: #7dd3fc;
+      --focus: #7dd3fc;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font); }
+    [hidden] { display: none !important; }
+    a { color: var(--link); text-underline-offset: 2px; }
+    a:hover { color: #bae6fd; }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+    main:focus { outline: none; }
+    h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
+    h2 { font-size: clamp(1.5rem, 1.2rem + 1vw, 1.95rem); margin: 0 0 12px; }
+    h3 { font-size: 1.125rem; margin: 0 0 8px; }
+    p { margin: 0 0 12px; }
+    .visually-hidden {
+      position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
     }
-    .container { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
-    header {
-      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
-      gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--border); margin-bottom: 22px;
+    .skip-link {
+      position: absolute; left: 12px; top: -80px; z-index: 50; padding: 10px 14px; border-radius: 8px;
+      background: var(--accent); color: var(--on-accent); font-weight: 700; text-decoration: none;
     }
-    .brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .badge {
-      display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px;
-      font-weight: 600; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35);
-    }
-    h1 { font-size: 28px; margin: 6px 0; letter-spacing: -0.02em; }
-    h2 { font-size: 19px; margin: 0 0 12px; }
-    p.sub { color: var(--muted); margin: 0; font-size: 15px; max-width: 760px; }
-    .store-hero-banner {
-      display: none;
-      margin-bottom: 22px;
-      padding: 14px 18px;
-      border-radius: 10px;
-      background: linear-gradient(90deg, rgba(16, 185, 129, 0.18), rgba(59, 130, 246, 0.14));
-      border: 1px solid rgba(16, 185, 129, 0.45);
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
-    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-    .card {
-      background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
-    }
-    label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-    input, select, textarea {
-      width: 100%; background: #090d16; color: var(--text); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit;
-    }
-    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
-    .controls-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
-    @media (max-width: 640px) { .controls-row { grid-template-columns: 1fr; } }
+    .skip-link:focus { top: 12px; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+    .lead { font-size: 1.125rem; color: var(--text-soft); max-width: 62ch; }
+    .help { font-size: 0.875rem; color: var(--muted); margin: 6px 0 0; }
+    .small { font-size: 0.875rem; color: var(--muted); }
+
+    /* Buttons */
     .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      background: var(--accent); color: #04130d; font-weight: 700; border: none;
-      padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13.5px; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
+      padding: 10px 18px; border-radius: 8px; border: 1px solid transparent; background: var(--accent);
+      color: var(--on-accent); font: inherit; font-size: 0.9375rem; font-weight: 700; line-height: 1.2;
+      text-align: center; text-decoration: none; cursor: pointer;
     }
-    .btn:hover { background: var(--accent-hover); color: #fff; }
-    .btn-secondary {
-      background: var(--card-alt); color: var(--text); border: 1px solid var(--border); font-weight: 600;
+    .btn:hover { background: var(--accent-hover); color: var(--on-accent); }
+    .btn-quiet { background: var(--surface-2); color: var(--text); border-color: var(--line-strong); font-weight: 600; }
+    .btn-quiet:hover { background: #223254; color: var(--text); }
+    .btn-small { min-height: 38px; padding: 7px 14px; font-size: 0.875rem; }
+    .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+    /* Top bar */
+    .topbar { position: sticky; top: 0; z-index: 20; background: rgba(11, 15, 23, 0.94); border-bottom: 1px solid var(--line); }
+    .topbar-inner { display: flex; align-items: center; gap: 24px; min-height: 64px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 750; font-size: 1.125rem; text-decoration: none; }
+    .brand:hover { color: var(--text); }
+    .brand svg { color: var(--accent-text); flex: none; }
+    .topbar nav { display: flex; gap: 20px; margin-left: auto; }
+    .topbar nav a { color: var(--text-soft); text-decoration: none; font-size: 0.9375rem; }
+    .topbar nav a:hover { color: var(--text); text-decoration: underline; }
+    @media (max-width: 760px) { .topbar nav { display: none; } .topbar .btn { margin-left: auto; } }
+    @media (max-width: 420px) {
+      .topbar-inner { gap: 12px; }
+      .brand { font-size: 1rem; }
+      .topbar .btn-small { font-size: 0.8125rem; padding: 6px 10px; }
     }
-    .btn-secondary:hover { background: #223254; }
-    .stats-bar {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0;
+
+    /* Sections */
+    main > section { padding: 72px 0; border-top: 1px solid var(--line); scroll-margin-top: 64px; }
+    main > section.hero { border-top: 0; padding: 64px 0 72px; }
+    @media (max-width: 640px) { main > section { padding: 52px 0; } main > section.hero { padding: 40px 0 52px; } }
+
+    /* Hero */
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 56px; align-items: center; }
+    @media (max-width: 920px) { .hero-grid { grid-template-columns: 1fr; gap: 40px; } }
+    .hero h1 { font-size: clamp(2rem, 1.35rem + 2.3vw, 2.85rem); line-height: 1.12; letter-spacing: -0.02em; font-weight: 750; margin: 0 0 20px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 14px; }
+    .hero .small { max-width: 56ch; }
+
+    /* The one illustration: one variant's price before, during and after a sale */
+    .example { margin: 0; padding: 24px 24px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+    .example figcaption { font-size: 0.875rem; color: var(--muted); margin-bottom: 20px; }
+    .example figcaption strong { display: block; color: var(--text); font-size: 1rem; margin-bottom: 2px; }
+    .timeline { list-style: none; margin: 0; padding: 0; }
+    .timeline li { position: relative; padding: 0 0 22px 36px; }
+    .timeline li::before {
+      content: ""; position: absolute; left: 6px; top: 5px; width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid var(--line-strong); background: var(--bg);
     }
-    @media (max-width: 640px) { .stats-bar { grid-template-columns: repeat(2, 1fr); } }
-    .stat-box {
-      background: var(--card-alt); border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+    .timeline li::after { content: ""; position: absolute; left: 12px; top: 24px; bottom: 2px; width: 2px; background: var(--line-strong); }
+    .timeline li:last-child::after { display: none; }
+    .timeline li.on-sale::before { background: var(--accent); border-color: var(--accent); }
+    .stage { display: block; font-size: 0.875rem; color: var(--muted); }
+    .amount { display: block; font-size: 1.75rem; font-weight: 750; line-height: 1.25; font-variant-numeric: tabular-nums; }
+    .on-sale .amount { color: var(--accent-text); }
+    .amount s { color: var(--muted); font-size: 1.05rem; font-weight: 500; margin-left: 10px; }
+    .stage-note { display: block; font-size: 0.875rem; color: var(--text-soft); }
+
+    /* How it works */
+    .steps { list-style: none; counter-reset: step; margin: 32px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+    .steps li { counter-increment: step; border-top: 2px solid var(--line-strong); padding-top: 18px; }
+    .steps li::before {
+      content: counter(step); display: block; margin-bottom: 12px; font-size: 2.25rem; font-weight: 750;
+      line-height: 1; color: var(--accent-text); font-variant-numeric: tabular-nums;
     }
-    .stat-val { font-size: 22px; font-weight: 700; }
-    .stat-lbl { font-size: 12px; color: var(--muted); }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
-    th, td { border-bottom: 1px solid var(--border); padding: 9px 10px; text-align: left; }
-    th { color: var(--muted); font-weight: 600; background: #0f1626; }
-    .pill {
-      display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; margin: 2px 4px 2px 0;
+    .steps p { color: var(--text-soft); }
+    @media (max-width: 860px) { .steps { grid-template-columns: 1fr; gap: 28px; } }
+
+    /* Forms */
+    label, legend { display: block; font-weight: 600; font-size: 0.9375rem; color: var(--text); margin-bottom: 6px; }
+    .optional { font-weight: 400; color: var(--muted); }
+    input, select, textarea {
+      width: 100%; background: var(--field); color: var(--text); border: 1px solid var(--field-border);
+      border-radius: 8px; padding: 10px 12px; font: inherit; font-size: 0.9375rem;
     }
-    .pill-danger { background: rgba(239,68,68,0.18); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
-    .pill-warn { background: rgba(245,158,11,0.18); color: #fcd34d; border: 1px solid rgba(245,158,11,0.4); }
-    .pill-ok { background: rgba(16,185,129,0.16); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
-    .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+    input:hover, select:hover, textarea:hover { border-color: #7189ba; }
+    input[aria-invalid="true"] { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25); }
+    textarea.code { font-family: var(--mono); font-size: 0.8125rem; line-height: 1.5; resize: vertical; }
+    fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+    .field { margin-bottom: 16px; min-width: 0; }
+    .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+    @media (max-width: 520px) { .fields { grid-template-columns: 1fr; } }
+    .field-error { color: #fca5a5; font-size: 0.875rem; margin: 6px 0 0; min-height: 0; }
+    .field-error:empty { display: none; }
+    .file-btn { position: relative; margin: 0; }
+    .file-btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .button-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+
+    /* Price preview tool */
+    .tool { margin-top: 28px; padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+    @media (max-width: 640px) { .tool { padding: 16px; } }
+    .tool-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 32px; }
+    @media (max-width: 920px) { .tool-grid { grid-template-columns: 1fr; gap: 20px; } }
+    .store-banner { margin: 0 0 20px; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--accent); background: rgba(16, 185, 129, 0.10); display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
+    .store-banner[hidden] { display: none; }
+    .store-banner p { margin: 0; }
+    .store-banner .small { margin-top: 4px; max-width: 70ch; }
+    .alert { margin: 16px 0 0; padding: 12px 14px; border-radius: 8px; background: rgba(239, 68, 68, 0.14); border: 1px solid #ef4444; color: #fecaca; }
+    .status { margin: 20px 0 0; font-weight: 600; }
+    .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 12px 0 0; }
+    @media (max-width: 760px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .summary > div { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+    .summary dt { font-size: 0.875rem; color: var(--muted); }
+    .summary dd { margin: 4px 0 0; }
+    .summary .num { display: block; font-size: 1.6rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .summary .sub { display: block; font-size: 0.8125rem; color: var(--muted); }
+    .notes { margin: 16px 0 0; padding-left: 20px; font-size: 0.875rem; color: var(--text-soft); }
+    .notes:empty { display: none; }
+    .notes li { margin-bottom: 4px; }
+    .table-wrap { margin-top: 16px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+    caption { caption-side: top; text-align: left; padding: 10px 12px; font-size: 0.8125rem; color: var(--muted); }
+    th, td { padding: 10px 12px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+    thead th { background: #0f1626; color: var(--muted); font-weight: 600; white-space: nowrap; }
+    th.num, td.num { text-align: right; white-space: nowrap; }
+    .cell-price { display: block; font-weight: 600; color: var(--text); }
+    td.sale .cell-price { color: var(--accent-text); font-weight: 700; }
+    .cell-title { display: block; font-weight: 600; color: var(--text); min-width: 170px; }
+    .cell-sub { display: block; font-size: 0.8125rem; color: var(--muted); overflow-wrap: anywhere; }
+    .none { color: var(--muted); }
+    td.checks { min-width: 230px; }
+    .tag { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 6px; border: 1px solid; font-size: 0.75rem; font-weight: 600; line-height: 1.4; }
+    .tag-ok { color: #6ee7b7; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.12); }
+    .tag-warn { color: #fcd34d; border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.12); }
+    .tag-danger { color: #fca5a5; border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.12); }
+    .tag-info { color: #93c5fd; border-color: rgba(59, 130, 246, 0.5); background: rgba(59, 130, 246, 0.12); }
+    .unchecked { display: block; margin-top: 4px; font-size: 0.75rem; color: var(--muted); }
+    .backup { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
+    .backup .help { max-width: 78ch; }
+    #backup-help { margin: 0 0 12px; }
+
+    /* Pricing */
+    .plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
     @media (max-width: 860px) { .plans { grid-template-columns: 1fr; } }
-    .plan-card {
-      background: var(--card-alt); border: 1px solid var(--border); border-radius: 10px; padding: 18px;
-      display: flex; flex-direction: column; justify-content: space-between;
+    .plan { display: flex; flex-direction: column; gap: 6px; padding: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+    .plan h3 { margin: 0; }
+    .plan-price { margin: 0; font-size: 2rem; font-weight: 750; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .plan-price span { font-size: 0.9375rem; font-weight: 500; color: var(--muted); }
+    .plan-limit { margin: 0 0 16px; color: var(--text-soft); }
+    .plan-limit:has(+ .plan-fine) { margin-bottom: 0; }
+    .plan-fine { margin: 0 0 16px; font-size: 0.875rem; color: var(--muted); }
+    .plan .btn { margin-top: auto; }
+    .plan-notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin-top: 36px; }
+    @media (max-width: 860px) { .plan-notes { grid-template-columns: 1fr; gap: 20px; } }
+    .plain-list { margin: 0; padding-left: 20px; color: var(--text-soft); }
+    .plain-list li { margin-bottom: 6px; }
+
+    /* FAQ */
+    .faq { margin-top: 24px; border-top: 1px solid var(--line); max-width: 860px; }
+    .faq details { border-bottom: 1px solid var(--line); }
+    .faq summary { position: relative; padding: 16px 44px 16px 0; font-weight: 600; cursor: pointer; list-style: none; }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary::after { content: "+"; position: absolute; right: 8px; top: 10px; font-size: 1.5rem; font-weight: 400; color: var(--muted); }
+    .faq details[open] > summary::after { content: "\2212"; }
+    .faq summary:hover { color: #ffffff; }
+    .faq .answer { padding: 0 0 18px; color: var(--text-soft); max-width: 72ch; }
+    .faq .answer p:last-child { margin-bottom: 0; }
+    .faq-group { margin-top: 36px; }
+
+    /* Rollouts and automatic discounts */
+    .compare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: 28px; }
+    @media (max-width: 860px) { .compare { grid-template-columns: 1fr; gap: 24px; } }
+    .compare > div { border-top: 2px solid var(--line-strong); padding-top: 16px; }
+    .compare > div.ours { border-top-color: var(--accent); }
+    .compare p { color: var(--text-soft); }
+
+    /* About */
+    .facts { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); margin: 28px 0 0; border-top: 1px solid var(--line); max-width: 920px; }
+    .facts > div { display: contents; }
+    .facts dt, .facts dd { margin: 0; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .facts dt { padding-right: 20px; color: var(--muted); font-weight: 600; }
+    .facts dd { color: var(--text-soft); }
+    @media (max-width: 640px) {
+      .facts { grid-template-columns: 1fr; }
+      .facts dt { border-bottom: 0; padding-bottom: 0; }
+      .facts dd { padding-top: 4px; }
     }
-    .plan-price { font-size: 26px; font-weight: 800; margin: 8px 0; color: #34d399; }
-    ul.feat { padding-left: 18px; color: var(--muted); font-size: 13.5px; margin: 10px 0 18px; }
-    ul.feat li { margin-bottom: 6px; }
-    footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-    a { color: #38bdf8; }
-    .modal-backdrop {
-      display: none; position: fixed; inset: 0; background: rgba(4, 9, 20, 0.82);
-      z-index: 9999; align-items: center; justify-content: center; padding: 20px;
+    .tested { margin-top: 40px; max-width: 860px; }
+
+    /* Early access */
+    .cta-block { max-width: 680px; }
+    .cta-block .btn { margin: 12px 0 16px; }
+
+    footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 0.875rem; }
+    footer p { margin: 0 0 6px; }
+
+    /* Early-access dialog */
+    dialog.ea {
+      width: min(580px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; padding: 0;
+      background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); border-radius: 14px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
     }
-    .modal-box {
-      background: var(--card); border: 1px solid var(--accent); border-radius: 14px;
-      max-width: 560px; width: 100%; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    dialog.ea::backdrop { background: rgba(3, 6, 12, 0.75); }
+    .ea-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 4px; }
+    .ea-head h2 { font-size: 1.375rem; margin: 0 0 6px; }
+    .ea-body { padding: 12px 20px 20px; }
+    .icon-btn {
+      flex: none; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: none;
+      color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer;
+    }
+    .icon-btn:hover { color: var(--text); background: var(--surface-2); }
+    .send-title { font-weight: 600; margin: 4px 0 8px; }
+    .ea-send { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 520px) { .ea-send { grid-template-columns: 1fr; } }
+
+    #toast {
+      position: fixed; left: 50%; bottom: 24px; z-index: 100; transform: translate(-50%, 12px); opacity: 0;
+      padding: 10px 16px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 700;
+      pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      #toast { transition: none; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div>
-        <div class="brand">
-          <span class="badge">100% Client-Side • Zero Login Required • Integer-Cent Engine</span>
-          <span class="badge" style="background:rgba(59,130,246,0.15);color:#93c5fd;border-color:rgba(59,130,246,0.35);">EU Omnibus 30d + Unit Cost Guard</span>
-        </div>
-        <h1>SafeRevert Bulk Price Editor &amp; Recovery CSV Simulator</h1>
-        <p class="sub">
-          Never reinstate Shopify prices from memory again. Simulate your flash sale in integer cents, catch below-cost margin losses &amp; EU Omnibus 30-day violations before touching your storefront, and generate an instant <strong>1-Click Original-Price Recovery CSV</strong>.
-        </p>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a href="#install-shopify" class="btn">Install on Shopify</a>
-      </div>
-    </header>
+  <a class="skip-link" href="#main">Skip to main content</a>
 
-    <div id="store-hero-banner" class="store-hero-banner">
-      <div>
-        <div style="font-weight:700;font-size:15px;color:#34d399;" id="store-hero-title">✓ Live Store Catalog Loaded</div>
-        <div style="font-size:13px;color:var(--text);" id="store-hero-sub">Real variants loaded into the simulator below.</div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="btn" onclick="downloadCsv('recovery')">⬇ Download Store Recovery CSV</button>
-        <a href="#install-shopify" class="btn btn-secondary">Automate in Shopify Admin</a>
-      </div>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#top">
+        <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <circle cx="16" cy="16" r="13.5" fill="none" stroke="currentColor" stroke-width="2.5" />
+          <text x="16" y="20.2" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="currentColor">SR</text>
+        </svg>
+        SafeRevert
+      </a>
+      <nav aria-label="Page sections">
+        <a href="#how-it-works">How it works</a>
+        <a href="#what-happens">What happens if…</a>
+        <a href="#price-preview">Price preview</a>
+        <a href="#pricing">Pricing</a>
+      </nav>
+      <a class="btn btn-small" data-cta href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert%20BFCM%20early%20access">Join BFCM early access</a>
     </div>
+  </header>
 
-    <div class="grid">
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-          <h2>1. Load Your Shopify Catalog or Paste CSV</h2>
-          <button type="button" class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="loadSampleCsv()">Load Sample CSV</button>
-        </div>
-
-        <div style="background:#090d16;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;">
-          <label for="live-store-input" style="color:#34d399;margin-bottom:4px;">⚡ Instant Store Pre-Loader (No CSV export needed):</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <input type="text" id="live-store-input" placeholder="e.g. deliawhisky.de or your-store.com" style="flex:1;min-width:180px;padding:8px 10px;" onkeydown="if(event.key==='Enter') loadStoreFromInput()" />
-            <button type="button" class="btn" style="padding:8px 14px;" onclick="loadStoreFromInput()">Load Store Products</button>
-          </div>
-        </div>
-
-        <div id="agentic-diagnostic-panel" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.35);border-radius:8px;padding:10px 12px;margin-bottom:12px;">
-          <div id="agentic-diagnostic-text" style="font-size:12.5px;color:var(--text);margin-bottom:8px;"></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="btn-restore-markdowns" class="btn" style="padding:6px 11px;font-size:12px;display:none;" onclick="downloadRestoreStuckMarkdownsCsv()">🛠 1-Click Job: Restore Active Markdowns to MSRP (.csv)</button>
-            <button type="button" class="btn btn-secondary" style="padding:6px 11px;font-size:12px;" onclick="downloadCsv('recovery')">⬇ 1-Click Job: Download Pre-Sale Backup (.csv)</button>
-          </div>
-        </div>
-
-        <p style="font-size:12.5px;color:var(--muted);margin-top:0;">
-          Processed <strong>100% locally in your browser</strong> (zero server uploads). Supports standard Shopify columns: <code>Handle, Variant SKU, Variant Price, Variant Compare At Price, Cost per item, Lowest 30d Price</code>.
-        </p>
-        <textarea id="csv-input" rows="7"></textarea>
-        <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <label style="margin:0;cursor:pointer;" class="btn btn-secondary">
-            Upload .CSV File
-            <input type="file" id="csv-file" accept=".csv,text/csv" style="display:none;" onchange="handleFileUpload(event)" />
-          </label>
-          <span id="file-status" style="font-size:12px;color:var(--muted);">Using built-in 6-SKU BFCM sample catalog.</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>2. Configure Flash Sale &amp; Safety Guardrails</h2>
-
-        <div style="background:#090d16;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;">
-          <label for="nl-job-input" style="color:#34d399;margin-bottom:4px;">🤖 Plain-English Job Copilot (Describe your promo — we configure the state machine):</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <input type="text" id="nl-job-input" placeholder="e.g. 25% off MSRP rounded to .99 with EU 30d cap" style="flex:1;min-width:190px;padding:8px 10px;" onkeydown="if(event.key==='Enter') applyNaturalLanguageJob()" />
-            <button type="button" class="btn" style="padding:8px 12px;" onclick="applyNaturalLanguageJob()">Auto-Setup &amp; Run</button>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
-            <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="setAndRunJobPrompt('25% off MSRP rounded to .99 with EU 30d cap')">25% off MSRP → .99 + EU Cap</button>
-            <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="setAndRunJobPrompt('20% off current price rounded to .99')">20% off Current → .99</button>
-            <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="setAndRunJobPrompt('$15 off current price exact cents')">$15 off Current (Exact)</button>
-          </div>
-        </div>
-        <div class="controls-row">
-          <div>
-            <label for="currency">Currency (ISO-4217 2-Dec)</label>
-            <select id="currency" onchange="runSimulation()">
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="CAD">CAD ($)</option>
-              <option value="AUD">AUD ($)</option>
-              <option value="CHF">CHF</option>
-              <option value="SEK">SEK</option>
-              <option value="PLN">PLN</option>
-              <option value="RON">RON</option>
-              <option value="RSD">RSD</option>
-              <option value="JPY">JPY (Test 0-Dec Reject)</option>
-            </select>
-          </div>
-          <div>
-            <label for="discount-type">Discount Type</label>
-            <select id="discount-type" onchange="updateDiscountTypeLabel(); runSimulation();">
-              <option value="PERCENTAGE">Percentage (%)</option>
-              <option value="FIXED_AMOUNT">Fixed Amount ($ / €)</option>
-            </select>
-          </div>
-          <div>
-            <label for="discount-val" id="discount-val-label">Discount Value (%)</label>
-            <input type="number" id="discount-val" value="20" min="0.01" max="100000" step="any" oninput="runSimulation()" />
-          </div>
-        </div>
-
-        <div class="controls-row">
-          <div>
-            <label for="discount-base">Calculate Off</label>
-            <select id="discount-base" onchange="runSimulation()">
-              <option value="BASELINE_PRICE">Current Selling Price</option>
-              <option value="BASELINE_COMPARE_AT">MSRP (Compare At Price)</option>
-            </select>
-          </div>
-          <div>
-            <label for="round-to">Charm Rounding</label>
-            <select id="round-to" onchange="runSimulation()">
-              <option value="99">Round to .99</option>
-              <option value="95">Round to .95</option>
-              <option value="0">Round to .00</option>
-              <option value="">Exact Cents (No Rounding)</option>
-            </select>
-          </div>
-          <div>
-            <label for="omnibus-cap">EU Omnibus 30d Guard</label>
-            <select id="omnibus-cap" onchange="runSimulation()">
-              <option value="warn">Flag Violations Only</option>
-              <option value="cap">Auto-Cap Compare-At to 30d Low</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
-          <button type="button" class="btn" onclick="runSimulation()">Run Deterministic Dry-Run Preview</button>
-          <button type="button" class="btn btn-secondary" onclick="downloadCsv('recovery')">⬇ Download Baseline Recovery CSV</button>
-          <button type="button" class="btn btn-secondary" onclick="downloadCsv('discounted')">⬇ Download Discounted Sale CSV</button>
-        </div>
-        <div id="error-banner" style="display:none;margin-top:12px;padding:10px 12px;border-radius:8px;background:rgba(239,68,68,0.18);border:1px solid var(--danger);color:#fca5a5;font-size:13px;"></div>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:24px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-        <h2>3. Pre-Flight Dry-Run Preview (Old State → New State in Integer Cents)</h2>
-        <span style="font-size:12.5px;color:var(--muted);">Zero IEEE-754 floating-point math • Ready for Shopify Admin → Products → Import</span>
-      </div>
-
-      <div class="stats-bar">
-        <div class="stat-box">
-          <div class="stat-val" id="st-total">0</div>
-          <div class="stat-lbl">Variants Simulated</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val" id="st-warn" style="color:var(--warn);">0</div>
-          <div class="stat-lbl">Total Guardrail Warnings</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val" id="st-cost" style="color:var(--danger);">0</div>
-          <div class="stat-lbl">Below Unit Cost (Margin Loss)</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val" id="st-omnibus" style="color:#60a5fa;">0</div>
-          <div class="stat-lbl">EU Omnibus 30d Alerts</div>
-        </div>
-      </div>
-
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Handle / SKU</th>
-              <th>Baseline Price</th>
-              <th>Baseline Compare-At</th>
-              <th>Unit Cost</th>
-              <th>30d Low</th>
-              <th>New Sale Price</th>
-              <th>New Compare-At</th>
-              <th>Effective %</th>
-              <th>Guardrail Status</th>
-            </tr>
-          </thead>
-          <tbody id="preview-tbody"></tbody>
-        </table>
-      </div>
-
-      <div class="grid" style="margin-top:18px;margin-bottom:0;">
+  <main id="main" tabindex="-1">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="wrap hero-grid">
         <div>
-          <label>Baseline Recovery Rollback CSV (Import to restore 100% exact pre-sale prices)</label>
-          <textarea id="out-recovery" rows="6" readonly></textarea>
+          <h1 id="hero-title">Schedule your sale. SafeRevert saves every original price first and puts it back when the sale ends.</h1>
+          <p class="lead">SafeRevert runs a Shopify sale by changing each product's price and setting a compare-at price, so your theme can show the crossed-out price on product and collection pages. Prices you change yourself during the sale stay as you set them.</p>
+          <div class="hero-actions">
+            <a class="btn" data-cta href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert%20BFCM%20early%20access">Join BFCM early access</a>
+            <a class="btn btn-quiet" href="#price-preview">Try the price preview</a>
+          </div>
+          <p class="small" data-mode="early-access">SafeRevert isn't on the Shopify App Store yet. Join the Black Friday Cyber Monday (BFCM) early-access list and we'll email you the App Store link as soon as Shopify approves it.</p>
+          <p class="small" data-mode="app-store" hidden>Install SafeRevert from its Shopify App Store listing. Plans are billed through Shopify.</p>
         </div>
-        <div>
-          <label>Discounted Sale CSV (Import to launch sale)</label>
-          <textarea id="out-discounted" rows="6" readonly></textarea>
+
+        <figure class="example">
+          <figcaption><strong>One variant through a sale</strong><span class="visually-hidden">: </span>Merino Travel Hoodie, size M, in a 25% off sale with a .99 price ending</figcaption>
+          <ol class="timeline">
+            <li>
+              <span class="stage">Before the sale</span>
+              <span class="amount">$89.00</span>
+              <span class="stage-note">No compare-at price</span>
+            </li>
+            <li class="on-sale">
+              <span class="stage">During the sale</span>
+              <span class="amount">$66.99 <s><span class="visually-hidden">was </span>$89.00</s></span>
+              <span class="stage-note">SafeRevert saved $89.00 and the empty compare-at price, then set the compare-at price to $89.00.</span>
+            </li>
+            <li>
+              <span class="stage">After the sale</span>
+              <span class="amount">$89.00</span>
+              <span class="stage-note">No compare-at price, as before the sale</span>
+            </li>
+          </ol>
+        </figure>
+      </div>
+    </section>
+
+    <section id="how-it-works" aria-labelledby="how-title">
+      <div class="wrap">
+        <h2 id="how-title">How it works</h2>
+        <ol class="steps">
+          <li>
+            <h3>Choose products and preview the prices</h3>
+            <p>Pick the products and the discount: a percent or an amount off, taken from the current price or from the compare-at price, with a price ending such as .99. The preview shows the new prices and flags any that fall below cost (when Shopify has the cost), price endings that move the discount by more than 5 points, and crossed-out prices above the EU 30-day lowest price.</p>
+          </li>
+          <li>
+            <h3>Schedule it, or test it on one product first</h3>
+            <p>Set the start and end in your store's time zone, or start the sale yourself. To be sure, run it on a single product first: SafeRevert sets the sale price, reads it back from Shopify, restores the original and reads that back too. When the sale starts, SafeRevert saves each variant's price and compare-at price before changing anything.</p>
+          </li>
+          <li>
+            <h3>When it ends, your prices come back</h3>
+            <p>At the end time, or when you end the sale yourself, SafeRevert puts back each saved price and compare-at price, including an empty compare-at price. If you changed a product's price during the sale, SafeRevert leaves that product as you set it.</p>
+            <p>Afterwards it reads the prices back from Shopify and shows the result for each product.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="what-happens" aria-labelledby="faq-title">
+      <div class="wrap">
+        <h2 id="faq-title">What happens if…</h2>
+        <div class="faq">
+          <details>
+            <summary>…I change a price myself during the sale?</summary>
+            <div class="answer">
+              <p>Your price stays. SafeRevert notices that the price was changed outside the app and stops managing that product, so ending the sale doesn't overwrite your change. It leaves that product's compare-at price as it is too: if you changed only the price, check whether you still want the crossed-out price.</p>
+              <p>When the sale ends, SafeRevert shows how many products kept your price.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…two or three sales include the same product?</summary>
+            <div class="answer">
+              <p>Shoppers see the lowest of the sale prices; the discounts don't add up. When one of the sales ends, the product moves to the lowest price among the sales still running, and its original price and compare-at price come back when the last of them ends.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…SafeRevert is down when a sale should end?</summary>
+            <div class="answer">
+              <p>SafeRevert can't change anything in your store while it's down, so the sale prices stay live until it's back. Then it restores every overdue sale first, before it starts any new sale. A sale that should have started in the meantime starts then, unless its end time has already passed.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…I uninstall SafeRevert during a sale?</summary>
+            <div class="answer">
+              <p>Shopify removes an app's access to your store the moment it's uninstalled. After that SafeRevert can no longer change your prices, so the sale prices stay live. Before you uninstall, use <strong>Restore all prices</strong> in SafeRevert: it ends every running sale and puts the original prices back while it still has access.</p>
+              <p>If you uninstall during a sale anyway and reinstall within 48 hours, SafeRevert still has your original prices and offers to restore them.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…another app or a price sync changes prices during the sale?</summary>
+            <div class="answer">
+              <p>SafeRevert treats it like a manual edit: those products keep the price the other app set, and ending the sale doesn't change them back. If an ERP, POS or feed app syncs prices into Shopify, pause that sync while a sale runs.</p>
+              <p>The receipt after the sale lists each of these products.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…I sell in other countries with fixed market prices?</summary>
+            <div class="answer">
+              <p>SafeRevert changes each product's base price and compare-at price. Shopify's help center notes that fixed prices you set for a market override the prices and compare-at prices set in your Shopify admin, so the sale won't show in a market where a product has a fixed price. <a href="https://help.shopify.com/en/manual/discounts/sales" rel="noopener noreferrer">Read Shopify's article on sale prices</a>.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…my store sells in the EU (30-day lowest price rule)?</summary>
+            <div class="answer">
+              <p>SafeRevert keeps a record of each product's price from the day you install it. The preview warns when a crossed-out price would be above the lowest price of the last 30 days, and you can have SafeRevert cap the crossed-out price at that lowest price during the sale; your original compare-at price comes back when the sale ends.</p>
+              <p>Because the record starts at install, it covers fewer than 30 days at first, and the preview shows how many days it covers. SafeRevert is a tool, not legal advice.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…a product is deleted during the sale?</summary>
+            <div class="answer">
+              <p>SafeRevert skips it and still restores every other product. The receipt lists it as deleted in Shopify.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…a sale has more variants than my plan allows?</summary>
+            <div class="answer">
+              <p>The sale doesn't start, and SafeRevert never upgrades your plan or adds charges on its own. Upgrade, or make a smaller sale.</p>
+              <p>The preview tells you whether a sale fits your plan before you schedule it.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…I need to stop a sale early?</summary>
+            <div class="answer">
+              <p>End it at any time and its original prices come back, with your own edits kept. If a large sale is still being applied when you stop it, SafeRevert stops before the next batch of products and restores the ones it already changed.</p>
+            </div>
+          </details>
+          <details>
+            <summary>…I want to change or cancel a scheduled sale?</summary>
+            <div class="answer">
+              <p>You can cancel a sale before it starts, change when a running sale ends, or duplicate a past sale to run it again. A running sale's discount and products stay as you previewed them; to change those, end it and start a new sale.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="faq-group">
+          <h3>Other questions</h3>
+          <div class="faq">
+            <details>
+              <summary>Can I try a sale on one product first?</summary>
+              <div class="answer">
+                <p>Yes. The one-product test sets the sale price on a single product, reads it back from Shopify, restores the original and reads that back too. The test price is kept out of the EU 30-day price record.</p>
+              </div>
+            </details>
+            <details>
+              <summary>Which store currencies work?</summary>
+              <div class="answer">
+                <p>Stores whose Shopify currency is one of these 19: USD, EUR, GBP, CAD, AUD, NZD, CHF, SEK, NOK, DKK, PLN, CZK, RON, RSD, BAM, SGD, HKD, MXN and BRL. For now SafeRevert can't run sales in other currencies.</p>
+              </div>
+            </details>
+            <details>
+              <summary>Does SafeRevert see my customers or orders?</summary>
+              <div class="answer">
+                <p>No. SafeRevert asks Shopify only for permission to read and edit products, so it can't see orders or customers, and it stores no customer data.</p>
+              </div>
+            </details>
+          </div>
         </div>
       </div>
+    </section>
+
+    <section id="rollouts" aria-labelledby="rollouts-title">
+      <div class="wrap">
+        <h2 id="rollouts-title">Why not Shopify Rollouts or automatic discounts?</h2>
+        <p class="lead">Both are built into Shopify and worth knowing. They do a different job.</p>
+        <div class="compare">
+          <div>
+            <h3>Automatic discounts</h3>
+            <p>They're applied in the cart and at checkout. Shopify's help center says that showing discount savings as crossed-out prices on product and collection pages needs a third-party discount app.</p>
+          </div>
+          <div>
+            <h3>Rollouts</h3>
+            <p>Available on the Basic plan and up, and since October 23, 2026 able to schedule market catalogs. A rollout switches a catalog on or off: it changes only the catalog's status. By default a catalog's percentage adjustment lowers compare-at prices too, edits to the catalog's prices during a rollout are saved right away, and Shopify doesn't restore a copy of the catalog from when the rollout started.</p>
+          </div>
+          <div class="ours">
+            <h3>SafeRevert</h3>
+            <p>Changes each product's own price and compare-at price after saving the original of every variant in the sale, and puts those originals back when the sale ends, except where you changed a price yourself.</p>
+          </div>
+        </div>
+        <p class="small">Sources: Shopify Help Center articles on <a href="https://help.shopify.com/en/manual/discounts/sales" rel="noopener noreferrer">sale prices</a>, <a href="https://help.shopify.com/en/manual/markets/rollouts/requirements-and-considerations" rel="noopener noreferrer">Rollouts requirements</a> and <a href="https://help.shopify.com/en/manual/markets/customizations/catalogs" rel="noopener noreferrer">catalogs</a>, and the <a href="https://changelog.shopify.com/posts/schedule-and-test-catalog-changes-with-rollouts" rel="noopener noreferrer">Shopify changelog of October 23, 2026</a>.</p>
+      </div>
+    </section>
+
+    <section id="price-preview" aria-labelledby="preview-title">
+      <div class="wrap">
+        <h2 id="preview-title">Try the price preview on your own products</h2>
+        <p class="lead">Paste or upload a product export from Shopify and pick a discount to see each new price and its checks, calculated the same way the app calculates them. Everything runs in this browser tab: your file isn't uploaded anywhere, and nothing in your store changes.</p>
+        <noscript><p class="alert">The price preview needs JavaScript turned on.</p></noscript>
+        <div class="store-banner" id="store-banner" role="status" hidden>
+          <div>
+            <p><strong id="store-banner-title"></strong></p>
+            <p class="small" id="store-banner-sub"></p>
+          </div>
+          <a class="btn" data-cta href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert%20BFCM%20early%20access">Join BFCM early access</a>
+        </div>
+
+        <div class="tool">
+          <div class="tool-grid">
+            <div>
+              <label for="csv-input">Product export (CSV)</label>
+              <textarea id="csv-input" class="code" rows="11" wrap="off" spellcheck="false" autocomplete="off" aria-describedby="csv-help"></textarea>
+              <p class="help" id="csv-help">In Shopify, open Products and click Export. Optional: to run the EU check, add a column named <em>Lowest 30d price</em> with each variant's lowest price of the last 30 days; Shopify's export doesn't include it.</p>
+              <div class="button-row">
+                <label class="btn btn-quiet file-btn">Upload a CSV file<input type="file" id="csv-file" class="visually-hidden" accept=".csv,text/csv" /></label>
+                <button type="button" class="btn btn-quiet" id="btn-example">Load the example</button>
+                <span class="small" id="file-status" aria-live="polite"></span>
+              </div>
+            </div>
+
+            <fieldset>
+              <legend>Sale settings</legend>
+              <div class="fields">
+                <div class="field">
+                  <label for="sim-currency">Store currency</label>
+                  <select id="sim-currency">
+                    <option value="USD">USD, US dollar</option>
+                    <option value="EUR">EUR, euro</option>
+                    <option value="GBP">GBP, British pound</option>
+                    <option value="CAD">CAD, Canadian dollar</option>
+                    <option value="AUD">AUD, Australian dollar</option>
+                    <option value="NZD">NZD, New Zealand dollar</option>
+                    <option value="CHF">CHF, Swiss franc</option>
+                    <option value="SEK">SEK, Swedish krona</option>
+                    <option value="NOK">NOK, Norwegian krone</option>
+                    <option value="DKK">DKK, Danish krone</option>
+                    <option value="PLN">PLN, Polish złoty</option>
+                    <option value="CZK">CZK, Czech koruna</option>
+                    <option value="RON">RON, Romanian leu</option>
+                    <option value="RSD">RSD, Serbian dinar</option>
+                    <option value="BAM">BAM, convertible mark</option>
+                    <option value="SGD">SGD, Singapore dollar</option>
+                    <option value="HKD">HKD, Hong Kong dollar</option>
+                    <option value="MXN">MXN, Mexican peso</option>
+                    <option value="BRL">BRL, Brazilian real</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="sim-type">Discount</label>
+                  <select id="sim-type">
+                    <option value="PERCENTAGE">Percent off</option>
+                    <option value="FIXED_AMOUNT">Amount off</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="sim-value">Discount value</label>
+                  <input id="sim-value" type="text" inputmode="decimal" value="25" autocomplete="off" aria-describedby="sim-value-help sim-value-error" />
+                  <p class="help" id="sim-value-help">A whole percent from 1 to 100.</p>
+                  <p class="field-error" id="sim-value-error" aria-live="polite"></p>
+                </div>
+                <div class="field">
+                  <label for="sim-base">Take the discount from</label>
+                  <select id="sim-base">
+                    <option value="BASELINE_PRICE">Current price</option>
+                    <option value="BASELINE_COMPARE_AT">Compare-at price, when higher</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="sim-ending">Price ending</label>
+                  <select id="sim-ending">
+                    <option value="99" selected>.99 (24.99)</option>
+                    <option value="95">.95 (24.95)</option>
+                    <option value="90">.90 (24.90)</option>
+                    <option value="0">.00 (25.00)</option>
+                    <option value="">Exact, no rounding</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="sim-eu">EU 30-day lowest price</label>
+                  <select id="sim-eu">
+                    <option value="warn">Warn only</option>
+                    <option value="cap">Cap the crossed-out price at the 30-day low</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+          <div id="sim-error" class="alert" role="alert" hidden></div>
+          <p id="sim-status" class="status" aria-live="polite"></p>
+
+          <div id="sim-results">
+            <dl class="summary">
+              <div><dt>Variants previewed</dt><dd><span class="num" id="st-total">0</span><span class="sub" id="st-total-sub"></span></dd></div>
+              <div><dt>With a warning</dt><dd><span class="num" id="st-warn">0</span><span class="sub" id="st-warn-sub"></span></dd></div>
+              <div><dt>Below cost</dt><dd><span class="num" id="st-cost">0</span><span class="sub" id="st-cost-sub"></span></dd></div>
+              <div><dt>Above the EU 30-day low</dt><dd><span class="num" id="st-eu">0</span><span class="sub" id="st-eu-sub"></span></dd></div>
+            </dl>
+            <ul class="notes" id="sim-notes"></ul>
+
+            <div class="table-wrap" role="region" aria-labelledby="sim-caption" tabindex="0">
+              <table>
+                <caption id="sim-caption">New prices</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col" class="num">Price now</th>
+                    <th scope="col" class="num">Sale price</th>
+                    <th scope="col" class="num">Discount</th>
+                    <th scope="col" class="num">Cost</th>
+                    <th scope="col" class="num">30-day low</th>
+                    <th scope="col">Checks</th>
+                  </tr>
+                </thead>
+                <tbody id="sim-tbody"></tbody>
+              </table>
+            </div>
+
+            <div class="backup">
+              <label for="backup-output">Backup of original prices — test the import on one product first</label>
+              <p class="help" id="backup-help">Made from the export above, in Shopify's import format: each variant's price and compare-at price as they are now. Importing it also sets each product's title, option names and values, and SKUs back to what they are in this export. We haven't tested importing this file into Shopify yet, so before you rely on it, test it on one product: import a copy that keeps only the header row and that product's rows, with Shopify's option to overwrite products with matching handles, and check that the product's variants and prices come out right. In the app you don't need this file: SafeRevert restores prices itself when a sale ends.</p>
+              <textarea id="backup-output" class="code" rows="7" wrap="off" readonly spellcheck="false" aria-describedby="backup-help backup-note"></textarea>
+              <p class="help" id="backup-note" aria-live="polite"></p>
+              <div class="button-row">
+                <button type="button" class="btn btn-quiet" id="btn-download-backup">Download the backup file</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pricing" aria-labelledby="pricing-title">
+      <div class="wrap">
+        <h2 id="pricing-title">Pricing</h2>
+        <p class="lead">Every plan includes every safety feature. Plans differ only in how many product variants one sale can include.</p>
+        <div class="plans">
+          <article class="plan" aria-labelledby="plan-free">
+            <h3 id="plan-free">Free</h3>
+            <p class="plan-price">$0</p>
+            <p class="plan-limit">Up to 50 variants per sale</p>
+            <a class="btn btn-quiet" data-cta data-plan="FREE" href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert%20BFCM%20early%20access">Join early access</a>
+          </article>
+          <article class="plan" aria-labelledby="plan-basic">
+            <h3 id="plan-basic">Basic</h3>
+            <p class="plan-price">$9.99 <span>every 30 days</span></p>
+            <p class="plan-limit">Up to 1,000 variants per sale</p>
+            <a class="btn btn-quiet" data-cta data-plan="BASIC" href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert%20BFCM%20early%20access">Join early access</a>
+          </article>
+          <article class="plan" aria-labelledby="plan-pro">
+            <h3 id="plan-pro">Pro</h3>
+            <p class="plan-price">$19.99 <span>every 30 days</span></p>
+            <p class="plan-limit">No plan limit on variants per sale</p>
+            <p class="plan-fine">A sale chosen by collection, tag or the whole store must stay under 25,000 variants, the most Shopify lets an app list in one search.</p>
+            <a class="btn btn-quiet" data-cta data-plan="PRO" href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert%20BFCM%20early%20access">Join early access</a>
+          </article>
+        </div>
+        <div class="plan-notes">
+          <div>
+            <h3>Included on every plan</h3>
+            <ul class="plain-list">
+              <li>Price preview with below-cost, price-ending and EU 30-day checks</li>
+              <li>Start and end times in your store's time zone, including a Black Friday to Cyber Monday preset</li>
+              <li>A test on one product before a sale goes live</li>
+              <li>Overlapping sales: the lowest price shows, discounts don't add up</li>
+              <li>Prices you change during a sale are kept</li>
+              <li>End a running sale at any time, even while it's still being applied</li>
+              <li>Restore all prices before you uninstall</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Billing</h3>
+            <ul class="plain-list">
+              <li>Billed by Shopify on your Shopify invoice, in US dollars, every 30 days.</li>
+              <li>No automatic upgrades or extra fees: a sale larger than your plan doesn't start until you upgrade or make a smaller sale.</li>
+              <li>Change or cancel your plan inside the app.</li>
+              <li>Restoring prices is always free, even after you downgrade or cancel.</li>
+              <li>Development stores get test charges, so trying a paid plan there costs nothing.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="about" aria-labelledby="about-title">
+      <div class="wrap">
+        <h2 id="about-title">Who makes SafeRevert</h2>
+        <dl class="facts">
+          <div><dt>Company</dt><dd>Prime Tech, Serbia</dd></div>
+          <div><dt>Founder and developer</dt><dd>Mario Stosic</dd></div>
+          <div>
+            <dt>Support</dt>
+            <dd><a href="mailto:mariostosic@prime-tech.rs">mariostosic@prime-tech.rs</a></dd>
+          </div>
+          <div>
+            <dt>Support hours</dt>
+            <dd>Every day, including Black Friday to Cyber Monday: 10:00–24:00 Central European Time (Belgrade), which is 04:00–18:00 US Eastern. Outside these hours your scheduled sales still start and end on their own, and ending a sale or restoring all prices works in the app at any time.</dd>
+          </div>
+          <!-- TODO(founder): no Hosting row until production really runs in Fly.io region fra (fly.toml) and you have checked it there. Today the app runs through a Cloudflare quick tunnel (shopify.app.toml application_url), so a data-location claim would be false. Then add: <div><dt>Hosting</dt><dd>Frankfurt, Germany (EU)</dd></div> -->
+          <div><dt>Access to your store</dt><dd>Read and edit products only. SafeRevert can't see orders or customers.</dd></div>
+          <div><dt>What SafeRevert stores</dt><dd>Product and variant IDs, SKUs, URL handles, prices and unit costs, a price record for the EU 30-day rule, your sales and plan, and the access token Shopify issues to SafeRevert. No customer data.</dd></div>
+          <div><dt>Payments</dt><dd>Plans are billed by Shopify. SafeRevert never sees your payment details.</dd></div>
+          <div>
+            <dt>When you uninstall</dt>
+            <dd>SafeRevert deletes its access token and your plan right away. Your saved original prices are kept for up to 48 hours, so a reinstall can restore them. If you don't reinstall, Shopify asks SafeRevert to delete your store's data 48 hours after the uninstall, and SafeRevert then deletes your saved prices, saved price history and sales.</dd>
+          </div>
+        </dl>
+
+        <div class="tested">
+          <h3>What SafeRevert's automated tests cover</h3>
+          <p class="small">The tests run these situations against a simulated Shopify store:</p>
+          <ul class="plain-list">
+            <li>the app restarting in the middle of a sale</li>
+            <li>Shopify failing part-way through starting or ending a sale</li>
+            <li>Shopify applying a price change but not answering in time</li>
+            <li>three overlapping sales on one product, ended in different orders</li>
+            <li>prices changed by hand during a sale</li>
+            <li>products deleted during a sale</li>
+            <li>a sale stopped while it's still being applied</li>
+            <li>a 100% discount, or an amount off larger than the price</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="early-access" aria-labelledby="early-title">
+      <div class="wrap cta-block">
+        <div data-mode="early-access">
+          <h2 id="early-title">Join BFCM early access</h2>
+          <p class="lead">SafeRevert isn't on the Shopify App Store yet. Send a short email and we'll reply with the App Store link as soon as Shopify approves it. Your store name and catalog size are optional; they help us plan support.</p>
+          <a class="btn" data-cta href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert%20BFCM%20early%20access">Join BFCM early access</a>
+          <p class="small">Prefer to write yourself? Email <a href="mailto:mariostosic@prime-tech.rs">mariostosic@prime-tech.rs</a>.</p>
+        </div>
+        <div data-mode="app-store" hidden>
+          <h2 id="store-title">Get SafeRevert</h2>
+          <p class="lead">Install SafeRevert from its Shopify App Store listing. Plans are billed through Shopify.</p>
+          <a class="btn" data-cta href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert">Install from the Shopify App Store</a>
+          <p class="small">Questions? Email <a href="mailto:mariostosic@prime-tech.rs">mariostosic@prime-tech.rs</a>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>© 2026 Prime Tech, Serbia. Support: <a href="mailto:mariostosic@prime-tech.rs">mariostosic@prime-tech.rs</a></p>
+      <p>SafeRevert is an independent app and isn't made by Shopify. Shopify is a trademark of Shopify Inc.</p>
     </div>
+  </footer>
 
-    <div class="card" id="install-shopify">
-      <h2>4. Automate Scheduled Sales &amp; Auto-Rollback inside Shopify Admin</h2>
-      <p class="sub">
-        Want automatic UTC/IANA scheduling, multi-campaign overlap resolution, <strong>1-Variant Live Canary Testing</strong>, and <strong>Automatic Mid-Sale Manual Edit Protection</strong> when your team edits a SKU during an active promotion? All plans are billed transparently through the official <strong>Shopify Billing API</strong> (never auto-upgraded without your confirmation).
-      </p>
-
-      <div style="margin-bottom:16px;padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.35);border-radius:8px;font-size:13px;color:var(--text);">
-        <strong style="color:#34d399;">✓ Outcome-Based Campaign Guarantee:</strong> Run unlimited Dry-Run Previews and a <strong>1-Variant Live Canary Test</strong> before any charge. Need Basic ($9.99/mo) or Pro ($19.99/mo) for a single BFCM or weekend flash sale? You can cancel in 1 click inside Shopify Admin immediately after your automatic post-sale rollback completes with 0 locked SKUs.
-      </div>
-
-      <div class="plans">
-        <div class="plan-card">
-          <div>
-            <span class="badge">FREE STARTER</span>
-            <div class="plan-price">$0.00 <span style="font-size:14px;color:var(--muted);font-weight:400;">/ month</span></div>
-            <div style="font-size:13px;color:var(--text);font-weight:600;">Up to 50 variants per campaign</div>
-            <ul class="feat">
-              <li>Deterministic Integer-Cent Engine</li>
-              <li>Mandatory Dry-Run Preview &amp; Margin Guard</li>
-              <li>1-Variant Live Canary Test Mode</li>
-              <li>Automatic Mid-Sale Manual Edit Protection</li>
-              <li>In-Memory Recovery CSV Export</li>
-            </ul>
-          </div>
-          <button class="btn btn-secondary" onclick="requestShopifyInstall('FREE')">Install Free Plan on Shopify</button>
-        </div>
-
-        <div class="plan-card" style="border-color:var(--accent);">
-          <div>
-            <span class="badge">MOST POPULAR • BASIC</span>
-            <div class="plan-price">$9.99 <span style="font-size:14px;color:var(--muted);font-weight:400;">/ month</span></div>
-            <div style="font-size:13px;color:var(--text);font-weight:600;">Up to 1,000 variants per campaign</div>
-            <ul class="feat">
-              <li>Everything in Free Starter</li>
-              <li>Automated UTC / IANA Timezone Scheduling</li>
-              <li>EU Omnibus 30-Day Lowest Price Tracker &amp; Auto-Cap</li>
-              <li>Unit-Cost (COGS) Negative Margin Protection</li>
-              <li>MSRP (<code>compare_at_price</code>) Discount Base</li>
-            </ul>
-          </div>
-          <button class="btn" onclick="requestShopifyInstall('BASIC')">Start Basic ($9.99/mo via Shopify)</button>
-        </div>
-
-        <div class="plan-card">
-          <div>
-            <span class="badge">PRO UNLIMITED</span>
-            <div class="plan-price">$19.99 <span style="font-size:14px;color:var(--muted);font-weight:400;">/ month</span></div>
-            <div style="font-size:13px;color:var(--text);font-weight:600;">Unlimited variants &amp; overlapping campaigns</div>
-            <ul class="feat">
-              <li>Everything in Basic Plan</li>
-              <li>Unlimited Catalog Variants (Cursor Paginated)</li>
-              <li>3+ Overlapping Campaign Combinatorics</li>
-              <li>Chunked Outbox Batching &amp; Read-Back Verification</li>
-              <li>Priority Engineering Support</li>
-            </ul>
-          </div>
-          <button class="btn btn-secondary" onclick="requestShopifyInstall('PRO')">Start Pro ($19.99/mo via Shopify)</button>
-        </div>
-      </div>
-
-      <div style="margin-top:18px;padding:14px;background:#090d16;border:1px solid var(--border);border-radius:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
-        <div style="font-size:13.5px;">
-          <strong>Instant Store Onboarding:</strong> Enter your store or <code>.myshopify.com</code> domain to activate your 1-click install link:
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1;max-width:520px;">
-          <input type="text" id="shop-domain-input" placeholder="your-store.myshopify.com" style="flex:1;min-width:210px;" />
-          <button type="button" class="btn" onclick="requestShopifyInstall('BASIC')">Get Install Link</button>
-        </div>
-      </div>
-    </div>
-
-    <footer>
-      <div>© 2026 Prime Tech • Engineered by Mario Stosic (<a href="mailto:mariostosic@prime-tech.rs">mariostosic@prime-tech.rs</a>)</div>
+  <dialog class="ea" id="early-access-dialog" aria-labelledby="ea-title" aria-describedby="ea-desc">
+    <div class="ea-head">
       <div>
-        <a href="mailto:mariostosic@prime-tech.rs">Contact Support</a>
+        <h2 id="ea-title">Join BFCM early access</h2>
+        <p class="small" id="ea-desc">This opens an email to mariostosic@prime-tech.rs in your own mailbox, and nothing is sent until you press Send there. We'll reply with the Shopify App Store link as soon as SafeRevert is approved.</p>
       </div>
-    </footer>
-  </div>
-
-  <!-- Instant Onboarding Modal -->
-  <div id="onboarding-modal" class="modal-backdrop" onclick="if(event.target===this) closeOnboardingModal()">
-    <div class="modal-box">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span class="badge" id="modal-plan-badge">BASIC PLAN • $9.99/MONTH VIA SHOPIFY</span>
-        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="closeOnboardingModal()">✕ Close</button>
-      </div>
-      <h2 style="margin-bottom:6px;">Activate SafeRevert on Your Shopify Store</h2>
-      <p style="font-size:13.5px;color:var(--muted);margin-top:0;">
-        Billed 100% transparently through the official <strong>Shopify Admin Billing API</strong> (with 1-Variant Canary Test &amp; full baseline rollback protection). Enter your store domain below:
-      </p>
-      <div style="margin-bottom:12px;">
-        <label for="modal-shop-input">Your Shopify Store Domain</label>
-        <input type="text" id="modal-shop-input" placeholder="your-store.myshopify.com" oninput="updateModalRequestPreview()" />
-      </div>
-      <div style="margin-bottom:14px;">
-        <label>Onboarding Request Message (Ready to Send)</label>
-        <textarea id="modal-msg-preview" rows="4" readonly></textarea>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="btn" id="btn-copy-request" onclick="copyOnboardingRequest()">📋 1-Click Copy Request</button>
-        <a id="btn-gmail-web" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Open in Gmail (Web) ↗</a>
-        <a id="btn-outlook-web" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Open in Outlook ↗</a>
-        <a id="btn-mailto" href="#" class="btn btn-secondary">Default Mail App</a>
-      </div>
-      <div id="modal-copy-toast" style="display:none;margin-top:10px;color:#34d399;font-size:13px;font-weight:600;">
-        ✓ Copied to clipboard! Email it to mariostosic@prime-tech.rs and we'll reply with your 1-click Shopify install link.
-      </div>
+      <button type="button" class="icon-btn" id="ea-close" aria-label="Close">×</button>
     </div>
-  </div>
+    <form class="ea-body" id="ea-form" novalidate>
+      <div class="field">
+        <label for="ea-store">Store name or URL <span class="optional">(optional)</span></label>
+        <input id="ea-store" type="text" maxlength="200" autocomplete="off" spellcheck="false" placeholder="Acme Outdoor or acme-outdoor.com" />
+      </div>
+      <div class="fields">
+        <div class="field">
+          <label for="ea-size">Approximate catalog size <span class="optional">(optional)</span></label>
+          <select id="ea-size">
+            <option value="">Not sure</option>
+            <option value="up-to-50">Up to 50 variants</option>
+            <option value="51-1000">51 to 1,000 variants</option>
+            <option value="1001-25000">1,001 to 25,000 variants</option>
+            <option value="over-25000">More than 25,000 variants</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="ea-plan">Plan you're interested in <span class="optional">(optional)</span></label>
+          <select id="ea-plan">
+            <option value="">Not decided yet</option>
+            <option value="FREE">Free</option>
+            <option value="BASIC">Basic, $9.99 a month</option>
+            <option value="PRO">Pro, $19.99 a month</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="ea-preview">Email preview</label>
+        <textarea id="ea-preview" class="code" rows="8" readonly spellcheck="false"></textarea>
+      </div>
+      <p class="send-title" id="ea-send-title">Send it with</p>
+      <div class="ea-send" role="group" aria-labelledby="ea-send-title">
+        <a class="btn" id="ea-gmail" href="mailto:mariostosic@prime-tech.rs" target="_blank" rel="noopener noreferrer">Gmail<span class="visually-hidden"> (opens in a new tab)</span></a>
+        <a class="btn btn-quiet" id="ea-outlook" href="mailto:mariostosic@prime-tech.rs" target="_blank" rel="noopener noreferrer">Outlook<span class="visually-hidden"> (opens in a new tab)</span></a>
+        <a class="btn btn-quiet" id="ea-mailto" href="mailto:mariostosic@prime-tech.rs">My email app</a>
+        <button type="button" class="btn btn-quiet" id="ea-copy">Copy the email</button>
+      </div>
+      <p class="help">No email app? Copy the email and send it to <a href="mailto:mariostosic@prime-tech.rs">mariostosic@prime-tech.rs</a> from any mailbox.</p>
+    </form>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
 
   <script>
-    const SAMPLE_CSV = [
-      "Handle,Variant SKU,Variant Price,Variant Compare At Price,Cost per item,Lowest 30d Price",
-      "leather-weekender-bag,BAG-001,120.00,150.00,65.00,110.00",
-      "merino-travel-hoodie,HD-002,89.00,,52.00,89.00",
-      "brass-keychain-clip,KEY-003,6.00,8.00,3.50,6.00",
-      "silk-sleep-mask,MSK-004,35.00,45.00,29.00,35.00",
-      "canvas-doppkitt,DOP-005,48.00,60.00,22.00,42.00",
-      "gift-card-clearance,CLR-006,2.00,5.00,1.20,2.00"
-    ].join("\n");
+    // Set this to SafeRevert's Shopify App Store listing once Shopify approves the app, for example
+    // window.SAFEREVERT_APP_STORE_URL = "https://apps.shopify.com/<listing-handle>";
+    // While it is empty, every early-access button opens the early-access email form.
+    window.SAFEREVERT_APP_STORE_URL = window.SAFEREVERT_APP_STORE_URL || "";
 
-    const ZERO_DEC = new Set(["BIF","CLP","DJF","GNF","HUF","ISK","JPY","KMF","KRW","MGA","PYG","RWF","TWD","UGX","VND","VUV","XAF","XOF","XPF"]);
-    const SUPPORTED_2DEC = new Set(["USD","EUR","GBP","CAD","AUD","NZD","CHF","SEK","NOK","DKK","PLN","CZK","RON","RSD","BAM","SGD","HKD","MXN","BRL"]);
+    (function () {
+      "use strict";
 
-    let _activeStoreDomain = "";
-    let _catalogIndexCache = null;
-    let _selectedPlanId = "BASIC";
+      const SUPPORT_EMAIL = "mariostosic@prime-tech.rs";
 
-    function formatCents(cents) {
-      const whole = Math.trunc(cents / 100);
-      const minor = Math.abs(cents % 100);
-      return whole + "." + String(minor).padStart(2, "0");
-    }
+      // ------------------------------------------------------------------ Calls to action
+      // Installs must start on Shopify's own App Store listing, never on this page, so only an
+      // https://apps.shopify.com/ address is accepted.
+      function appStoreListingUrl() {
+        const raw = String(window.SAFEREVERT_APP_STORE_URL || "").trim();
+        if (!raw) return "";
+        if (/^https:\/\/apps\.shopify\.com\/[A-Za-z0-9][A-Za-z0-9._~\/?#=&%+-]*$/.test(raw)) return raw;
+        console.warn("SAFEREVERT_APP_STORE_URL is ignored: it must start with https://apps.shopify.com/");
+        return "";
+      }
 
-    function parseDecimalToCents(str) {
-      const trimmed = String(str || "").trim();
-      const m = /^(\d+)(?:\.(\d{1,2}))?$/.exec(trimmed);
-      if (!m) throw new Error('Invalid 2-decimal currency amount: "' + str + '"');
-      return Number.parseInt(m[1], 10) * 100 + Number.parseInt((m[2] || "00").padEnd(2, "0"), 10);
-    }
-
-    function updateDiscountTypeLabel() {
-      const t = document.getElementById("discount-type").value;
-      const lbl = document.getElementById("discount-val-label");
-      const inp = document.getElementById("discount-val");
-      if (t === "PERCENTAGE") {
-        lbl.textContent = "Discount Value (%)";
-        if (Number(inp.value) > 100) inp.value = "20";
+      const listingUrl = appStoreListingUrl();
+      const ctaLinks = Array.from(document.querySelectorAll("[data-cta]"));
+      if (listingUrl) {
+        for (const link of ctaLinks) {
+          link.href = listingUrl;
+          link.textContent = "Install from the Shopify App Store";
+        }
+        for (const node of document.querySelectorAll("[data-mode]")) {
+          node.hidden = node.getAttribute("data-mode") !== "app-store";
+        }
+        document.getElementById("early-access").setAttribute("aria-labelledby", "store-title");
       } else {
-        lbl.textContent = "Discount Amount ($ / €)";
-      }
-    }
-
-    function parseCsvRfc4180(csvText) {
-      const rows = [];
-      let row = [], field = "", inQuotes = false;
-      let i = csvText.charCodeAt(0) === 0xfeff ? 1 : 0;
-      for (; i < csvText.length; i++) {
-        const ch = csvText[i];
-        if (inQuotes) {
-          if (ch === '"') {
-            if (csvText[i + 1] === '"') { field += '"'; i++; }
-            else inQuotes = false;
-          } else field += ch;
-          continue;
-        }
-        if (ch === '"') inQuotes = true;
-        else if (ch === ",") { row.push(field); field = ""; }
-        else if (ch === "\r" || ch === "\n") {
-          if (ch === "\r" && csvText[i + 1] === "\n") i++;
-          row.push(field); rows.push(row); row = []; field = "";
-        } else field += ch;
-      }
-      if (field !== "" || row.length > 0) { row.push(field); rows.push(row); }
-      return rows;
-    }
-
-    function escapeCsv(val) {
-      if (val === null || val === undefined) return "";
-      const s = String(val);
-      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    }
-
-    function loadSampleCsv() {
-      _activeStoreDomain = "";
-      document.getElementById("store-hero-banner").style.display = "none";
-      document.getElementById("csv-input").value = SAMPLE_CSV;
-      document.getElementById("file-status").textContent = "Loaded 6-SKU BFCM sample catalog.";
-      runSimulation();
-    }
-
-    async function fetchCatalogIndex() {
-      if (_catalogIndexCache) return _catalogIndexCache;
-      for (const rel of ["./stores/catalog-index.json", "../stores/catalog-index.json", "/saferevert/stores/catalog-index.json"]) {
-        try {
-          const r = await fetch(rel);
-          if (r.ok) {
-            _catalogIndexCache = await r.json();
-            return _catalogIndexCache;
-          }
-        } catch (_) {}
-      }
-      return {};
-    }
-
-    function normalizeDomainInput(raw) {
-      return String(raw || "")
-        .trim()
-        .toLowerCase()
-        .replace(/^https?:\/\//, "")
-        .replace(/^www\./, "")
-        .split("/")[0]
-        .split("?")[0];
-    }
-
-    function applyStoreVariantsToSimulator(domain, variants) {
-      if (!variants || !variants.length) return false;
-      _activeStoreDomain = domain;
-      document.getElementById("live-store-input").value = domain;
-      document.getElementById("shop-domain-input").value = domain;
-
-      // Auto-select EUR for European TLDs
-      if (/\.(de|nl|fr|es|it|eu|gr|sk|at|be)$/.test(domain)) {
-        document.getElementById("currency").value = "EUR";
-      } else if (/\.ro$/.test(domain)) {
-        document.getElementById("currency").value = "RON";
-      } else if (/\.co\.uk$/.test(domain)) {
-        document.getElementById("currency").value = "GBP";
-      }
-
-      const lines = ["Handle,Variant SKU,Variant Price,Variant Compare At Price"];
-      for (const v of variants) {
-        lines.push([
-          escapeCsv(v.handle || "item"),
-          escapeCsv(v.sku || "SKU"),
-          escapeCsv(v.price || "10.00"),
-          escapeCsv(v.compare_at || "")
-        ].join(","));
-      }
-      document.getElementById("csv-input").value = lines.join("\n");
-      document.getElementById("file-status").textContent =
-        "✓ Loaded " + variants.length + " live variants from " + domain + " (/products.json)";
-
-      const hero = document.getElementById("store-hero-banner");
-      document.getElementById("store-hero-title").textContent =
-        "✓ Live Catalog Audit Loaded for " + domain + " (" + variants.length + " real variants)";
-      document.getElementById("store-hero-sub").textContent =
-        "Your real store prices & compare_at_price markdowns are pre-loaded below. Download your 1-Click Baseline Recovery CSV anytime.";
-      hero.style.display = "flex";
-
-      runSimulation();
-      return true;
-    }
-
-    async function loadStoreByDomain(rawDomain) {
-      const domain = normalizeDomainInput(rawDomain);
-      if (!domain) return;
-      const statusEl = document.getElementById("file-status");
-      statusEl.textContent = "Loading live catalog for " + domain + "...";
-
-      // 1. Check pre-indexed static store snapshots first (instant, zero CORS)
-      const idx = await fetchCatalogIndex();
-      if (idx && idx[domain] && idx[domain].length) {
-        applyStoreVariantsToSimulator(domain, idx[domain]);
-        return;
-      }
-
-      // 2. Fallback: Try direct /products.json or public CORS proxy for any live Shopify store
-      const targetUrl = "https://" + domain + "/products.json?limit=25";
-      const candidates = [
-        targetUrl,
-        "https://api.allorigins.win/raw?url=" + encodeURIComponent(targetUrl)
-      ];
-      for (const u of candidates) {
-        try {
-          const r = await fetch(u);
-          if (!r.ok) continue;
-          const data = await r.json();
-          const prods = data && data.products;
-          if (!Array.isArray(prods) || !prods.length) continue;
-          const extracted = [];
-          for (const p of prods) {
-            const handle = String(p.handle || "item");
-            for (let i = 0; i < (p.variants || []).length; i++) {
-              const v = p.variants[i];
-              const pr = String(v.price || "").trim();
-              if (!/^\d+(?:\.\d{1,2})?$/.test(pr) || Number(pr) <= 0) continue;
-              const cp = String(v.compare_at_price || "").trim();
-              extracted.push({
-                handle: handle.slice(0, 48),
-                sku: String(v.sku || (handle.slice(0, 12).toUpperCase() + "-" + (i + 1))).slice(0, 32),
-                price: Number(pr).toFixed(2),
-                compare_at: /^\d+(?:\.\d{1,2})?$/.test(cp) && Number(cp) >= Number(pr) ? Number(cp).toFixed(2) : ""
-              });
-              if (extracted.length >= 20) break;
-            }
-            if (extracted.length >= 20) break;
-          }
-          if (extracted.length) {
-            applyStoreVariantsToSimulator(domain, extracted);
-            return;
-          }
-        } catch (_) {}
-      }
-
-      statusEl.textContent = "Could not auto-fetch /products.json for " + domain + " — paste your Shopify Product Export CSV above.";
-    }
-
-    function loadStoreFromInput() {
-      const val = document.getElementById("live-store-input").value;
-      loadStoreByDomain(val);
-    }
-
-    function handleFileUpload(ev) {
-      const file = ev.target.files && ev.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        _activeStoreDomain = "";
-        document.getElementById("csv-input").value = String(e.target.result || "");
-        document.getElementById("file-status").textContent = "Loaded file: " + file.name;
-        runSimulation();
-      };
-      reader.readAsText(file);
-    }
-
-    function runSimulation() {
-      const errBanner = document.getElementById("error-banner");
-      errBanner.style.display = "none";
-      try {
-        const currency = document.getElementById("currency").value;
-        if (ZERO_DEC.has(currency)) {
-          throw new Error('Unsupported currency "' + currency + '": Zero-decimal ISO-4217 currencies (e.g. JPY, KRW) are explicitly rejected to prevent 100x minor-unit scaling errors.');
-        }
-        if (!SUPPORTED_2DEC.has(currency)) {
-          throw new Error('Currency "' + currency + '" is not in the verified 2-decimal ISO-4217 allowlist.');
-        }
-
-        const discountType = document.getElementById("discount-type").value;
-        const rawDiscountInput = String(document.getElementById("discount-val").value || "0").trim();
-        let discountVal = 0;
-        if (discountType === "PERCENTAGE") {
-          discountVal = Math.trunc(Number(rawDiscountInput || 0));
-          if (discountVal <= 0 || discountVal > 100) {
-            throw new Error("Percentage discount must be an integer between 1% and 100%.");
-          }
-        } else {
-          // Accept human-friendly major currency units (e.g. "10" or "10.50" -> 1000 or 1050 cents)
-          discountVal = parseDecimalToCents(rawDiscountInput);
-          if (discountVal <= 0) {
-            throw new Error("Fixed discount amount must be greater than 0.00.");
-          }
-        }
-
-        const discountBase = document.getElementById("discount-base").value;
-        const roundRaw = document.getElementById("round-to").value;
-        const roundToCents = roundRaw === "" ? null : Number.parseInt(roundRaw, 10);
-        const enforceOmnibusCap = document.getElementById("omnibus-cap").value === "cap";
-
-        const rawLines = parseCsvRfc4180(document.getElementById("csv-input").value || "")
-          .map(r => r.map(c => c.trim()))
-          .filter(r => r.some(c => c.length > 0));
-        if (rawLines.length < 2) throw new Error("CSV must include a header row and at least 1 variant row.");
-
-        const headers = rawLines[0].map(h => h.toLowerCase());
-        const handleIdx = headers.findIndex(h => h === "handle");
-        const skuIdx = headers.findIndex(h => h === "variant sku" || h === "sku");
-        const priceIdx = headers.findIndex(h => h === "variant price" || h === "price");
-        const compareIdx = headers.findIndex(h => h === "variant compare at price" || h === "compare at price");
-        const costIdx = headers.findIndex(h => h === "cost per item" || h === "unit cost" || h === "cost");
-        const low30Idx = headers.findIndex(h => h === "lowest 30d price" || h === "lowest 30-day price" || h === "omnibus 30d low");
-
-        if (priceIdx === -1) throw new Error('CSV header must include "Variant Price" (or "Price").');
-
-        const items = [];
-        for (let i = 1; i < rawLines.length; i++) {
-          const cols = rawLines[i];
-          if (!cols[priceIdx]) continue;
-          const handle = handleIdx >= 0 && cols[handleIdx] ? cols[handleIdx] : "item-" + i;
-          const sku = skuIdx >= 0 && cols[skuIdx] ? cols[skuIdx] : "SKU-" + i;
-          const origPrice = parseDecimalToCents(cols[priceIdx]);
-          const rawComp = compareIdx >= 0 ? cols[compareIdx] || "" : "";
-          const parsedComp = rawComp !== "" ? parseDecimalToCents(rawComp) : null;
-          const origComp = parsedComp !== null && parsedComp >= origPrice ? parsedComp : null;
-          const unitCost = costIdx >= 0 && cols[costIdx] ? parseDecimalToCents(cols[costIdx]) : null;
-          const low30 = low30Idx >= 0 && cols[low30Idx] ? parseDecimalToCents(cols[low30Idx]) : null;
-
-          const refBase = discountBase === "BASELINE_COMPARE_AT" && origComp !== null && origComp > origPrice ? origComp : origPrice;
-          let rawTarget = discountType === "PERCENTAGE"
-            ? Math.trunc((refBase * (100 - discountVal)) / 100)
-            : refBase - discountVal;
-          if (rawTarget > origPrice) rawTarget = origPrice;
-
-          let clampedFloor = false;
-          if (rawTarget < 1) { rawTarget = 1; clampedFloor = true; }
-          let finalPrice = rawTarget;
-
-          if (roundToCents !== null && !clampedFloor) {
-            const bw = Math.trunc(rawTarget / 100);
-            const cands = [(bw - 1) * 100 + roundToCents, bw * 100 + roundToCents, (bw + 1) * 100 + roundToCents]
-              .filter(c => c >= 1 && c <= origPrice);
-            if (cands.length > 0) {
-              cands.sort((a, b) => Math.abs(a - rawTarget) - Math.abs(b - rawTarget) || a - b);
-              finalPrice = cands[0];
-            } else {
-              finalPrice = 1; clampedFloor = true;
-            }
-          }
-
-          const warnings = [];
-          if (clampedFloor) warnings.push({ code: "FLOOR_CLAMPED_TO_MIN_PRICE", type: "warn" });
-
-          const unroundedBps = Math.trunc(((refBase - rawTarget) * 10000) / refBase);
-          const effBps = Math.trunc(((refBase - finalPrice) * 10000) / refBase);
-          if (roundToCents !== null && Math.abs(effBps - unroundedBps) > 500) {
-            warnings.push({ code: "ROUNDING_DRIFT_EXCEEDS_5PP (" + (Math.abs(effBps - unroundedBps) / 100).toFixed(1) + "pp)", type: "warn" });
-          }
-
-          if (unitCost !== null && finalPrice < unitCost) {
-            warnings.push({ code: "BELOW_UNIT_COST_MARGIN_LOSS (-" + formatCents(unitCost - finalPrice) + ")", type: "danger" });
-          }
-
-          let newComp = origComp !== null && origComp >= origPrice ? origComp : origPrice;
-          let autoClamped = false;
-          if (enforceOmnibusCap && low30 !== null && newComp > low30) {
-            newComp = Math.max(finalPrice, low30);
-            autoClamped = true;
-          }
-          if (low30 !== null && newComp > low30 && (!enforceOmnibusCap || newComp > finalPrice)) {
-            warnings.push({ code: "OMNIBUS_30D_VIOLATION (+" + formatCents(newComp - low30) + " > 30d low)", type: "warn" });
-          }
-
-          items.push({
-            handle, sku, origPrice, origComp, unitCost, low30, finalPrice, newComp,
-            effPct: (effBps / 100).toFixed(2) + "%", warnings, autoClamped
+        for (const link of ctaLinks) {
+          link.addEventListener("click", (event) => {
+            event.preventDefault();
+            openEarlyAccess(link.getAttribute("data-plan") || "", link);
           });
         }
-
-        document.getElementById("st-total").textContent = String(items.length);
-        document.getElementById("st-warn").textContent = String(items.reduce((a, x) => a + x.warnings.length, 0));
-        document.getElementById("st-cost").textContent = String(items.filter(x => x.warnings.some(w => w.code.startsWith("BELOW_UNIT_COST"))).length);
-        document.getElementById("st-omnibus").textContent = String(items.filter(x => x.warnings.some(w => w.code.startsWith("OMNIBUS_30D")) || x.autoClamped).length);
-
-        const tbody = document.getElementById("preview-tbody");
-        tbody.innerHTML = items.map(it => {
-          const pills = it.warnings.length === 0
-            ? (it.autoClamped ? '<span class="pill pill-ok">OMNIBUS_AUTO_CAPPED</span>' : '<span class="pill pill-ok">SAFE</span>')
-            : it.warnings.map(w => '<span class="pill ' + (w.type === "danger" ? "pill-danger" : "pill-warn") + '">' + w.code + '</span>').join("");
-          return "<tr>" +
-            "<td><strong>" + it.handle + "</strong><br/><span style='color:var(--muted);font-size:11.5px;'>" + it.sku + "</span></td>" +
-            "<td>" + formatCents(it.origPrice) + "</td>" +
-            "<td>" + (it.origComp !== null ? formatCents(it.origComp) : "—") + "</td>" +
-            "<td>" + (it.unitCost !== null ? formatCents(it.unitCost) : "—") + "</td>" +
-            "<td>" + (it.low30 !== null ? formatCents(it.low30) : "—") + "</td>" +
-            "<td style='font-weight:700;color:#34d399;'>" + formatCents(it.finalPrice) + "</td>" +
-            "<td>" + formatCents(it.newComp) + "</td>" +
-            "<td>" + it.effPct + "</td>" +
-            "<td>" + pills + "</td>" +
-          "</tr>";
-        }).join("");
-
-        const hdr = "Handle,Variant SKU,Variant Price,Variant Compare At Price";
-        document.getElementById("out-recovery").value = [hdr].concat(items.map(it =>
-          [escapeCsv(it.handle), escapeCsv(it.sku), formatCents(it.origPrice), it.origComp !== null ? formatCents(it.origComp) : ""].join(",")
-        )).join("\n");
-
-        document.getElementById("out-discounted").value = [hdr].concat(items.map(it =>
-          [escapeCsv(it.handle), escapeCsv(it.sku), formatCents(it.finalPrice), formatCents(it.newComp)].join(",")
-        )).join("\n");
-
-        window._lastSimulatedItems = items;
-        updateAgenticDiagnostic(items);
-      } catch (err) {
-        errBanner.textContent = err.message || String(err);
-        errBanner.style.display = "block";
-      }
-    }
-
-    function updateAgenticDiagnostic(items) {
-      const diagText = document.getElementById("agentic-diagnostic-text");
-      const restoreBtn = document.getElementById("btn-restore-markdowns");
-      if (!diagText || !restoreBtn) return;
-
-      const storeLabel = _activeStoreDomain ? ("<code>" + _activeStoreDomain + "</code>") : "loaded catalog";
-      const markdownItems = (items || []).filter(it => it.origComp !== null && it.origComp > it.origPrice);
-      const charmItems = (items || []).filter(it => (it.origPrice % 100 === 99) || (it.origPrice % 100 === 95));
-      const driftItems = (items || []).filter(it => it.warnings.some(w => w.code.startsWith("ROUNDING_DRIFT")));
-
-      let msg = "<strong>🤖 Autonomous Catalog Diagnostic (" + storeLabel + "):</strong> Scanned <strong>" + items.length + "</strong> variants — ";
-      if (markdownItems.length > 0) {
-        msg += "detected <strong style='color:#fbbf24;'>" + markdownItems.length + " active/stuck markdowns</strong> (<code>Price &lt; Compare-At</code>), ";
-        restoreBtn.style.display = "inline-block";
-        restoreBtn.textContent = "🛠 1-Click Job: Restore " + markdownItems.length + " Active Sale Items to Original MSRP (.csv)";
-      } else {
-        msg += "<strong>0</strong> stuck markdowns, ";
-        restoreBtn.style.display = "none";
-      }
-      msg += "<strong>" + charmItems.length + "</strong> charm-priced (<code>.99/.95</code>) SKUs, and <strong>" + driftItems.length + "</strong> rounding-drift alerts.";
-      diagText.innerHTML = msg;
-    }
-
-    function downloadRestoreStuckMarkdownsCsv() {
-      const items = (window._lastSimulatedItems || []).filter(it => it.origComp !== null && it.origComp > it.origPrice);
-      if (!items.length) return;
-      const hdr = "Handle,Variant SKU,Variant Price,Variant Compare At Price";
-      const content = [hdr].concat(items.map(it =>
-        [escapeCsv(it.handle), escapeCsv(it.sku), formatCents(it.origComp), ""].join(",")
-      )).join("\n");
-      const prefix = _activeStoreDomain ? _activeStoreDomain.replace(/[^a-z0-9.-]/gi, "-") + "-" : "shopify-";
-      const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = prefix + "restore-active-markdowns-to-msrp.csv";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    function setAndRunJobPrompt(text) {
-      const inp = document.getElementById("nl-job-input");
-      if (inp) inp.value = text;
-      applyNaturalLanguageJob();
-    }
-
-    function applyNaturalLanguageJob() {
-      const raw = String(document.getElementById("nl-job-input")?.value || "").trim().toLowerCase();
-      if (!raw) return;
-
-      // 1. Parse percentage vs fixed amount
-      const pctMatch = /(\d+(?:\.\d+)?)\s*%/.exec(raw);
-      const fixedMatch = /(?:\$|€|£|usd|eur|gbp)\s*(\d+(?:\.\d{1,2})?)|(\d+(?:\.\d{1,2})?)\s*(?:dollars?|euros?|bucks?|off\s+fixed)/.exec(raw);
-      if (pctMatch) {
-        document.getElementById("discount-type").value = "PERCENTAGE";
-        updateDiscountTypeLabel();
-        document.getElementById("discount-val").value = String(Math.min(100, Math.max(1, Math.round(Number(pctMatch[1])))));
-      } else if (fixedMatch) {
-        document.getElementById("discount-type").value = "FIXED_AMOUNT";
-        updateDiscountTypeLabel();
-        document.getElementById("discount-val").value = String(fixedMatch[1] || fixedMatch[2]);
       }
 
-      // 2. Parse discount base (MSRP / Compare-At vs Current)
-      if (raw.includes("msrp") || raw.includes("compare")) {
-        document.getElementById("discount-base").value = "BASELINE_COMPARE_AT";
-      } else if (raw.includes("current") || raw.includes("selling") || raw.includes("baseline")) {
-        document.getElementById("discount-base").value = "BASELINE_PRICE";
+      // ------------------------------------------------------------------ Early-access email
+      const dialog = document.getElementById("early-access-dialog");
+      const storeField = document.getElementById("ea-store");
+      const sizeField = document.getElementById("ea-size");
+      const planField = document.getElementById("ea-plan");
+      const emailPreview = document.getElementById("ea-preview");
+      const toast = document.getElementById("toast");
+      const PLAN_NAMES = { FREE: "Free", BASIC: "Basic ($9.99 a month)", PRO: "Pro ($19.99 a month)" };
+      let opener = null;
+      let email = null;
+
+      function oneLine(value, max) {
+        return String(value || "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
       }
 
-      // 3. Parse charm rounding
-      if (raw.includes("exact") || raw.includes("no round")) {
-        document.getElementById("round-to").value = "";
-      } else if (raw.includes(".99") || raw.includes(" 99")) {
-        document.getElementById("round-to").value = "99";
-      } else if (raw.includes(".95") || raw.includes(" 95")) {
-        document.getElementById("round-to").value = "95";
-      } else if (raw.includes(".00") || raw.includes("whole")) {
-        document.getElementById("round-to").value = "0";
+      function composeEmail() {
+        const store = oneLine(storeField.value, 200);
+        const size = sizeField.value ? sizeField.options[sizeField.selectedIndex].text : "Not sure";
+        const plan = PLAN_NAMES[planField.value] || "Not decided yet";
+        return {
+          subject: "SafeRevert BFCM early access" + (store ? ": " + store.slice(0, 80) : ""),
+          body: [
+            "Hi Mario,",
+            "",
+            "Please add me to the SafeRevert BFCM early-access list and send me the Shopify App Store link when SafeRevert is approved.",
+            "",
+            "Store: " + (store || "not given"),
+            "Approximate catalog size: " + size,
+            "Plan I'm interested in: " + plan,
+            "",
+            "Thanks"
+          ].join("\n")
+        };
       }
 
-      // 4. Parse EU Omnibus 30d Cap
-      if (raw.includes("cap") || raw.includes("omnibus") || raw.includes("30d") || raw.includes("30-day")) {
-        document.getElementById("omnibus-cap").value = "cap";
+      function emailText() {
+        return "To: " + SUPPORT_EMAIL + "\nSubject: " + email.subject + "\n\n" + email.body;
       }
 
-      runSimulation();
-    }
+      function refreshEmail() {
+        email = composeEmail();
+        const to = encodeURIComponent(SUPPORT_EMAIL);
+        const subject = encodeURIComponent(email.subject);
+        const body = encodeURIComponent(email.body);
+        document.getElementById("ea-gmail").href =
+          "https://mail.google.com/mail/?view=cm&fs=1&to=" + to + "&su=" + subject + "&body=" + body;
+        document.getElementById("ea-outlook").href =
+          "https://outlook.office.com/mail/deeplink/compose?to=" + to + "&subject=" + subject + "&body=" + body;
+        document.getElementById("ea-mailto").href = "mailto:" + SUPPORT_EMAIL + "?subject=" + subject + "&body=" + body;
+        emailPreview.value = emailText();
+      }
 
-    function downloadCsv(kind) {
-      const content = document.getElementById(kind === "recovery" ? "out-recovery" : "out-discounted").value;
-      if (!content) return;
-      const prefix = _activeStoreDomain ? _activeStoreDomain.replace(/[^a-z0-9.-]/gi, "-") + "-" : "shopify-";
-      const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = prefix + (kind === "recovery" ? "baseline-recovery-rollback.csv" : "discounted-sale.csv");
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
+      function openEarlyAccess(plan, from) {
+        opener = from || null;
+        if (plan && PLAN_NAMES[plan]) planField.value = plan;
+        if (!storeField.value && window.SAFEREVERT_PRELOADED_STORE) storeField.value = window.SAFEREVERT_PRELOADED_STORE;
+        refreshEmail();
+        if (typeof dialog.showModal === "function") {
+          if (!dialog.open) dialog.showModal();
+        } else {
+          dialog.setAttribute("open", "");
+        }
+        storeField.focus();
+      }
 
-    function requestShopifyInstall(planId) {
-      _selectedPlanId = planId || "BASIC";
-      const planLabels = {
-        FREE: "FREE STARTER • $0.00/MONTH VIA SHOPIFY",
-        BASIC: "BASIC PLAN • $9.99/MONTH VIA SHOPIFY",
-        PRO: "PRO UNLIMITED • $19.99/MONTH VIA SHOPIFY"
+      function restoreFocus() {
+        if (opener && document.contains(opener)) opener.focus();
+        opener = null;
+      }
+
+      function closeEarlyAccess() {
+        if (typeof dialog.close === "function") {
+          dialog.close();
+        } else {
+          dialog.removeAttribute("open");
+          restoreFocus();
+        }
+      }
+
+      function showToast(message) {
+        // An open modal dialog sits in the top layer: the toast must live inside it to be seen.
+        (dialog.open ? dialog : document.body).appendChild(toast);
+        toast.textContent = message;
+        toast.classList.add("show");
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => toast.classList.remove("show"), 2500);
+      }
+
+      async function copyEmail() {
+        if (!email) refreshEmail();
+        let copied = false;
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(emailText());
+            copied = true;
+          }
+        } catch (_) {
+          copied = false;
+        }
+        if (!copied) {
+          // file:// pages and older browsers: copy the selected email preview instead.
+          emailPreview.focus();
+          emailPreview.select();
+          try {
+            copied = document.execCommand("copy");
+          } catch (_) {
+            copied = false;
+          }
+        }
+        showToast(copied ? "Copied to clipboard!" : "Select the email preview and copy it.");
+      }
+
+      dialog.addEventListener("close", restoreFocus);
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) closeEarlyAccess();
+      });
+      document.getElementById("ea-close").addEventListener("click", closeEarlyAccess);
+      document.getElementById("ea-form").addEventListener("submit", (event) => event.preventDefault());
+      document.getElementById("ea-copy").addEventListener("click", copyEmail);
+      storeField.addEventListener("input", refreshEmail);
+      sizeField.addEventListener("change", refreshEmail);
+      planField.addEventListener("change", refreshEmail);
+
+      // ------------------------------------------------------------------ Price preview
+      // Same calculation as the app (src/pricing.ts, calculateVariantDiscount), in whole cents so no
+      // floating-point rounding. It runs only in this tab; nothing is uploaded.
+      const CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "NZD", "CHF", "SEK", "NOK", "DKK", "PLN", "CZK", "RON", "RSD", "BAM", "SGD", "HKD", "MXN", "BRL"];
+      const TABLE_LIMIT = 200;
+      // Current Shopify export headers first, then the older names.
+      const COLUMN_NAMES = {
+        handle: ["url handle", "handle"],
+        title: ["title"],
+        opt1Name: ["option1 name"],
+        opt1Value: ["option1 value"],
+        opt2Name: ["option2 name"],
+        opt2Value: ["option2 value"],
+        opt3Name: ["option3 name"],
+        opt3Value: ["option3 value"],
+        sku: ["sku", "variant sku"],
+        price: ["price", "variant price"],
+        compareAt: ["compare-at price", "compare at price", "variant compare at price"],
+        cost: ["cost per item", "unit cost", "cost"],
+        low30: ["lowest 30d price", "lowest 30-day price", "omnibus 30d low", "lowest_price_30d"],
+        giftCard: ["gift card"]
       };
-      document.getElementById("modal-plan-badge").textContent = planLabels[_selectedPlanId] || planLabels.BASIC;
-
-      const existingShop = (document.getElementById("shop-domain-input").value || "").trim() || _activeStoreDomain || "";
-      document.getElementById("modal-shop-input").value = existingShop;
-      document.getElementById("modal-copy-toast").style.display = "none";
-      updateModalRequestPreview();
-      document.getElementById("onboarding-modal").style.display = "flex";
-    }
-
-    function closeOnboardingModal() {
-      document.getElementById("onboarding-modal").style.display = "none";
-    }
-
-    function updateModalRequestPreview() {
-      const shop = (document.getElementById("modal-shop-input").value || "").trim() || _activeStoreDomain || "your-store.myshopify.com";
-      const subj = "SafeRevert Shopify Install Request (" + _selectedPlanId + " Plan) - " + shop;
-      const body = [
-        "Hi Mario,",
-        "",
-        "I tested the SafeRevert CSV Simulator and would like to install SafeRevert (" + _selectedPlanId + " plan) on our Shopify store:",
-        "",
-        "Store domain: " + shop,
-        "",
-        "Please send over our 1-click Shopify OAuth install link."
+      // Columns of the backup file, in this order, under the header names of the pasted export.
+      const BACKUP_COLUMNS = ["handle", "title", "opt1Name", "opt1Value", "opt2Name", "opt2Value", "opt3Name", "opt3Value", "sku", "price", "compareAt"];
+      const EXAMPLE_CSV = [
+        "Title,URL handle,Option1 name,Option1 value,SKU,Price,Compare-at price,Cost per item,Lowest 30d price",
+        "Leather Weekender Bag,leather-weekender-bag,Color,Tan,BAG-001-TAN,120.00,150.00,65.00,110.00",
+        ",leather-weekender-bag,,Black,BAG-001-BLK,120.00,150.00,65.00,120.00",
+        "Merino Travel Hoodie,merino-travel-hoodie,Size,S,HD-002-S,89.00,,52.00,89.00",
+        ",merino-travel-hoodie,,M,HD-002-M,89.00,,52.00,89.00",
+        "Brass Keychain Clip,brass-keychain-clip,Title,Default Title,KEY-003,6.00,,3.50,6.00",
+        "Silk Sleep Mask,silk-sleep-mask,Title,Default Title,MSK-004,35.00,45.00,29.00,35.00",
+        "Canvas Dopp Kit,canvas-dopp-kit,Title,Default Title,DOP-005,48.00,,22.00,42.00",
+        "Enamel Pin,enamel-pin,Title,Default Title,PIN-006,2.00,,1.20,2.00"
       ].join("\n");
 
-      document.getElementById("modal-msg-preview").value = body;
-      const encSubj = encodeURIComponent(subj);
-      const encBody = encodeURIComponent(body);
-      document.getElementById("btn-mailto").href =
-        "mailto:mariostosic@prime-tech.rs?subject=" + encSubj + "&body=" + encBody;
-      document.getElementById("btn-gmail-web").href =
-        "https://mail.google.com/mail/?view=cm&fs=1&to=mariostosic@prime-tech.rs&su=" + encSubj + "&body=" + encBody;
-      document.getElementById("btn-outlook-web").href =
-        "https://outlook.office.com/mail/deeplink/compose?to=mariostosic@prime-tech.rs&subject=" + encSubj + "&body=" + encBody;
-    }
+      const csvInput = document.getElementById("csv-input");
+      const fileInput = document.getElementById("csv-file");
+      const fileStatus = document.getElementById("file-status");
+      const currencyField = document.getElementById("sim-currency");
+      const typeField = document.getElementById("sim-type");
+      const valueField = document.getElementById("sim-value");
+      const valueHelp = document.getElementById("sim-value-help");
+      const valueError = document.getElementById("sim-value-error");
+      const baseField = document.getElementById("sim-base");
+      const endingField = document.getElementById("sim-ending");
+      const euField = document.getElementById("sim-eu");
+      const errorBox = document.getElementById("sim-error");
+      const statusLine = document.getElementById("sim-status");
+      const results = document.getElementById("sim-results");
+      const notesList = document.getElementById("sim-notes");
+      const tableBody = document.getElementById("sim-tbody");
+      const tableCaption = document.getElementById("sim-caption");
+      const backupBox = document.getElementById("backup-output");
+      const backupNote = document.getElementById("backup-note");
+      const downloadButton = document.getElementById("btn-download-backup");
 
-    async function copyOnboardingRequest() {
-      const text = document.getElementById("modal-msg-preview").value;
-      try {
-        await navigator.clipboard.writeText(text);
-        document.getElementById("modal-copy-toast").style.display = "block";
-      } catch (_) {}
-    }
+      function parseCsv(text) {
+        // RFC 4180: quoted fields, doubled quotes and line breaks inside quotes (Shopify quotes
+        // descriptions and tags).
+        const rows = [];
+        let row = [];
+        let field = "";
+        let quoted = false;
+        let i = text.charCodeAt(0) === 0xfeff ? 1 : 0;
+        for (; i < text.length; i++) {
+          const ch = text[i];
+          if (quoted) {
+            if (ch === '"') {
+              if (text[i + 1] === '"') {
+                field += '"';
+                i++;
+              } else {
+                quoted = false;
+              }
+            } else {
+              field += ch;
+            }
+          } else if (ch === '"') {
+            quoted = true;
+          } else if (ch === ",") {
+            row.push(field);
+            field = "";
+          } else if (ch === "\r" || ch === "\n") {
+            if (ch === "\r" && text[i + 1] === "\n") i++;
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = "";
+          } else {
+            field += ch;
+          }
+        }
+        if (field !== "" || row.length > 0) {
+          row.push(field);
+          rows.push(row);
+        }
+        return rows;
+      }
 
-    (function initPage() {
-      loadSampleCsv();
+      function csvField(value) {
+        // Import files get RFC 4180 quoting only: a formula prefix would change SKUs and titles.
+        const text = value === null || value === undefined ? "" : String(value);
+        return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+      }
+
+      function parseMoney(text) {
+        const match = /^(\d{1,9})(?:\.(\d{1,2}))?$/.exec(String(text).trim());
+        if (!match) return null;
+        return Number.parseInt(match[1], 10) * 100 + Number.parseInt((match[2] || "0").padEnd(2, "0"), 10);
+      }
+
+      function money(cents) {
+        return Math.trunc(cents / 100) + "." + String(cents % 100).padStart(2, "0");
+      }
+
+      function shorten(text) {
+        const flat = oneLine(text, 60);
+        return String(text).length > 60 ? flat + "…" : flat;
+      }
+
+      function plural(count, one, many) {
+        return count + " " + (count === 1 ? one : many);
+      }
+
+      function updateValueHelp() {
+        valueHelp.textContent = typeField.value === "FIXED_AMOUNT"
+          ? "An amount in " + currencyField.value + ", for example 5 or 4.50."
+          : "A whole percent from 1 to 100.";
+      }
+
+      function readRule() {
+        const currency = currencyField.value;
+        if (!CURRENCIES.includes(currency)) return { error: "Choose one of the listed currencies." };
+        const type = typeField.value === "FIXED_AMOUNT" ? "FIXED_AMOUNT" : "PERCENTAGE";
+        const raw = valueField.value.trim();
+        let value;
+        if (type === "PERCENTAGE") {
+          if (!/^\d{1,3}$/.test(raw) || Number(raw) < 1 || Number(raw) > 100) {
+            return { error: "Enter a whole percent from 1 to 100, for example 25." };
+          }
+          value = Number(raw);
+        } else {
+          value = parseMoney(raw);
+          if (value === null || value < 1) {
+            return { error: "Enter an amount in " + currency + ", for example 5 or 4.50." };
+          }
+        }
+        return {
+          rule: {
+            currency: currency,
+            type: type,
+            value: value,
+            fromCompareAt: baseField.value === "BASELINE_COMPARE_AT",
+            ending: endingField.value === "" ? null : Number.parseInt(endingField.value, 10),
+            capAtLow: euField.value === "cap"
+          }
+        };
+      }
+
+      function findColumns(headerRow) {
+        const lower = headerRow.map((h) => h.trim().toLowerCase());
+        const found = {};
+        for (const key of Object.keys(COLUMN_NAMES)) {
+          found[key] = null;
+          for (const name of COLUMN_NAMES[key]) {
+            const index = lower.indexOf(name);
+            if (index !== -1) {
+              found[key] = { index: index, header: headerRow[index].trim() };
+              break;
+            }
+          }
+        }
+        return found;
+      }
+
+      function readRows(text) {
+        const lines = parseCsv(text)
+          .map((cells) => cells.map((c) => c.trim()))
+          .filter((cells) => cells.some((c) => c !== ""));
+        if (lines.length < 2) {
+          return { fatal: "Paste a product export with a header row and at least one product row." };
+        }
+        const cols = findColumns(lines[0]);
+        if (!cols.price) {
+          return { fatal: "The file needs a price column: Price (Variant Price in older exports)." };
+        }
+        if (!cols.handle) {
+          return { fatal: "The file needs a URL handle column (Handle in older exports), so each row can be matched to its product." };
+        }
+        const cell = (cells, key) => (cols[key] ? cells[cols[key].index] || "" : "");
+        const products = new Map();
+        const rows = [];
+        // Every variant row that has a URL handle, for the backup file. The preview's skip rules
+        // below (gift cards, 0.00 prices, unreadable cost or 30-day values) never apply to it.
+        const variants = [];
+        let noHandleRow = 0;
+        const skipped = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cells = lines[i];
+          const rowNumber = i + 1;
+          const handle = cell(cells, "handle");
+          // Title, option names and the gift-card flag sit on the first row of each product.
+          let product = handle ? products.get(handle) : null;
+          if (handle && !product) {
+            product = { title: "", names: ["", "", ""], giftCard: false };
+            products.set(handle, product);
+          }
+          if (product) {
+            if (!product.title) product.title = cell(cells, "title");
+            ["opt1Name", "opt2Name", "opt3Name"].forEach((key, n) => {
+              if (!product.names[n]) product.names[n] = cell(cells, key);
+            });
+            if (/^true$/i.test(cell(cells, "giftCard"))) product.giftCard = true;
+          }
+          const rawPrice = cell(cells, "price");
+          const values = [cell(cells, "opt1Value"), cell(cells, "opt2Value"), cell(cells, "opt3Value")];
+          // Image rows have neither a price nor an option value; every variant row has at least one.
+          if (!rawPrice && !values[0]) continue;
+          if (!handle) {
+            if (!noHandleRow) noHandleRow = rowNumber;
+            skipped.push("Row " + rowNumber + " has no URL handle, so it can't be matched to a product.");
+            continue;
+          }
+          const sku = cell(cells, "sku");
+          variants.push({ handle: handle, product: product, sku: sku, values: values, rawPrice: rawPrice, rawCompareAt: cell(cells, "compareAt") });
+          if (!rawPrice) {
+            skipped.push("Row " + rowNumber + " has no price.");
+            continue;
+          }
+          if (product.giftCard) {
+            skipped.push("Row " + rowNumber + " is a gift card. Gift cards are left out of the preview.");
+            continue;
+          }
+          const priceCents = parseMoney(rawPrice);
+          if (priceCents === null) {
+            skipped.push("Row " + rowNumber + ": “" + shorten(rawPrice) + "” isn't a price. Use numbers like 19.99.");
+            continue;
+          }
+          if (priceCents === 0) {
+            skipped.push("Row " + rowNumber + " has a price of 0.00. SafeRevert leaves products priced at 0.00 out of sales.");
+            continue;
+          }
+          const amounts = {};
+          let unreadable = "";
+          for (const key of ["compareAt", "cost", "low30"]) {
+            const raw = cell(cells, key);
+            amounts[key] = raw === "" ? null : parseMoney(raw);
+            if (raw !== "" && amounts[key] === null) unreadable = raw;
+          }
+          if (unreadable) {
+            skipped.push("Row " + rowNumber + ": “" + shorten(unreadable) + "” isn't an amount. Use numbers like 19.99.");
+            continue;
+          }
+          rows.push({
+            rowNumber: rowNumber,
+            handle: handle,
+            product: product,
+            sku: sku,
+            values: values,
+            priceCents: priceCents,
+            compareAtCents: amounts.compareAt,
+            costCents: amounts.cost,
+            low30Cents: amounts.low30 !== null && amounts.low30 > 0 ? amounts.low30 : null
+          });
+        }
+        return { cols: cols, rows: rows, variants: variants, noHandleRow: noHandleRow, skipped: skipped };
+      }
+
+      function priceRow(row, rule) {
+        const original = row.priceCents;
+        // As in the app, a compare-at price below the price (or 0.00) counts as no compare-at price.
+        const compareAt = row.compareAtCents !== null && row.compareAtCents >= original ? row.compareAtCents : null;
+        const base = rule.fromCompareAt && compareAt !== null && compareAt > original ? compareAt : original;
+        let raw = rule.type === "PERCENTAGE" ? Math.trunc((base * (100 - rule.value)) / 100) : base - rule.value;
+        if (raw > original) raw = original;
+        let floored = false;
+        if (raw < 1) {
+          raw = 1;
+          floored = true;
+        }
+        let sale = raw;
+        if (rule.ending !== null && !floored) {
+          const whole = Math.trunc(raw / 100);
+          const candidates = [(whole - 1) * 100 + rule.ending, whole * 100 + rule.ending, (whole + 1) * 100 + rule.ending]
+            .filter((c) => c >= 1 && c <= original);
+          if (candidates.length > 0) {
+            candidates.sort((a, b) => Math.abs(a - raw) - Math.abs(b - raw) || a - b);
+            sale = candidates[0];
+          } else {
+            sale = 1;
+            floored = true;
+          }
+        }
+        const warnings = [];
+        if (floored) warnings.push({ kind: "warn", text: "Raised to the 0.01 minimum" });
+        const plannedBps = Math.trunc(((base - raw) * 10000) / base);
+        const actualBps = Math.trunc(((base - sale) * 10000) / base);
+        if (rule.ending !== null && Math.abs(actualBps - plannedBps) > 500) {
+          warnings.push({ kind: "warn", text: "Price ending moves the discount by " + (Math.abs(actualBps - plannedBps) / 100).toFixed(1) + " points" });
+        }
+        const belowCost = row.costCents !== null && sale < row.costCents;
+        if (belowCost) warnings.push({ kind: "danger", text: "Below cost by " + money(row.costCents - sale) });
+        let saleCompareAt = compareAt !== null ? compareAt : original;
+        let capped = false;
+        if (rule.capAtLow && row.low30Cents !== null && saleCompareAt > row.low30Cents) {
+          saleCompareAt = Math.max(sale, row.low30Cents);
+          capped = true;
+        }
+        const aboveLow = row.low30Cents !== null && saleCompareAt > row.low30Cents && (!rule.capAtLow || saleCompareAt > sale);
+        if (aboveLow) {
+          warnings.push({ kind: "warn", text: "Crossed-out price " + money(saleCompareAt - row.low30Cents) + " above the 30-day low" });
+        }
+        return {
+          row: row,
+          sale: sale,
+          saleCompareAt: saleCompareAt,
+          discount: (actualBps / 100).toFixed(1) + "%",
+          warnings: warnings,
+          belowCost: belowCost,
+          aboveLow: aboveLow,
+          capped: capped
+        };
+      }
+
+      function buildBackup(cols, variants, noHandleRow) {
+        // A product goes into the backup with all of its variants or not at all: what Shopify's
+        // importer does with variants that are missing from the file hasn't been tested.
+        const backup = { text: "", variants: 0, products: 0, leftOut: [], problem: "" };
+        if (!cols.opt1Value) {
+          backup.problem = "No backup file: it needs the option columns (Option1 value and the others) of a full Shopify product export. Without them, Shopify's importer can replace a product's variants.";
+          return backup;
+        }
+        if (noHandleRow) {
+          backup.problem = "No backup file: row " + noHandleRow + " is a variant without a URL handle, so the backup can't tell which product it belongs to. Export your products from Shopify again and use that file.";
+          return backup;
+        }
+        const keys = BACKUP_COLUMNS.filter((key) => cols[key]);
+        const lines = [keys.map((key) => csvField(cols[key].header)).join(",")];
+        const groups = new Map();
+        for (const variant of variants) {
+          if (!groups.has(variant.handle)) groups.set(variant.handle, []);
+          groups.get(variant.handle).push(variant);
+        }
+        for (const [handle, list] of groups) {
+          const product = list[0].product;
+          const count = (test) => list.filter(test).length;
+          const reasons = [];
+          const noPrice = count((v) => v.rawPrice === "");
+          const badPrice = count((v) => v.rawPrice !== "" && parseMoney(v.rawPrice) === null);
+          const badCompareAt = count((v) => v.rawCompareAt !== "" && parseMoney(v.rawCompareAt) === null);
+          // Without option values Shopify's importer can replace a product's variants.
+          const noValues = count((v) => !v.values[0]);
+          if (noPrice) reasons.push(plural(noPrice, "variant has", "variants have") + " no price");
+          if (badPrice) reasons.push(plural(badPrice, "price", "prices") + " couldn't be read");
+          if (badCompareAt) reasons.push(plural(badCompareAt, "compare-at price", "compare-at prices") + " couldn't be read");
+          if (noValues) reasons.push(plural(noValues, "variant has", "variants have") + " no option values");
+          if (cols.title && !product.title) reasons.push("the product title is missing");
+          if (list.some((v) => v.values.some((value, n) => value !== "" && !product.names[n]))) {
+            reasons.push("an option name is missing");
+          }
+          if (reasons.length > 0) {
+            backup.leftOut.push(shorten(handle) + " (" + reasons.join(", ") + ")");
+            continue;
+          }
+          list.forEach((variant, n) => {
+            const first = n === 0; // product fields only on each product's first row, as in Shopify's export
+            const compareAtCents = variant.rawCompareAt === "" ? null : parseMoney(variant.rawCompareAt);
+            const values = {
+              handle: handle,
+              title: first ? product.title : "",
+              opt1Name: first ? product.names[0] : "",
+              opt1Value: variant.values[0],
+              opt2Name: first ? product.names[1] : "",
+              opt2Value: variant.values[1],
+              opt3Name: first ? product.names[2] : "",
+              opt3Value: variant.values[2],
+              sku: variant.sku,
+              price: money(parseMoney(variant.rawPrice)),
+              compareAt: compareAtCents === null ? "" : money(compareAtCents)
+            };
+            lines.push(keys.map((key) => csvField(values[key])).join(","));
+          });
+          backup.products++;
+          backup.variants += list.length;
+        }
+        if (backup.variants > 0) backup.text = lines.join("\n");
+        return backup;
+      }
+
+      function describeBackup(backup, cols) {
+        if (backup.problem) return backup.problem;
+        const parts = [backup.variants === 0
+          ? "No backup file."
+          : "The backup file has " + plural(backup.variants, "variant", "variants") + " of " + plural(backup.products, "product", "products") + "."];
+        if (backup.leftOut.length > 0) {
+          const more = backup.leftOut.length - 5;
+          parts.push("Left out of the backup: " + backup.leftOut.slice(0, 5).join("; ") +
+            (more > 0 ? "; and " + plural(more, "more product", "more products") : "") +
+            ". A product goes into the backup with all of its variants or not at all.");
+        }
+        if (!cols.compareAt) parts.push("The file has no compare-at column, so the backup can't restore compare-at prices.");
+        return parts.join(" ");
+      }
+
+      function cellText(text, className) {
+        const td = document.createElement("td");
+        if (className) td.className = className;
+        td.textContent = text;
+        return td;
+      }
+
+      function amountCell(cents) {
+        return cents === null ? cellText("none", "num none") : cellText(money(cents), "num");
+      }
+
+      function priceCell(priceCents, compareAtCents, className) {
+        const td = document.createElement("td");
+        td.className = className;
+        const price = document.createElement("span");
+        price.className = "cell-price";
+        price.textContent = money(priceCents);
+        const compare = document.createElement("span");
+        compare.className = "cell-sub";
+        compare.textContent = compareAtCents === null ? "no compare-at" : "compare-at " + money(compareAtCents);
+        td.append(price, compare);
+        return td;
+      }
+
+      function tag(text, kind) {
+        const span = document.createElement("span");
+        span.className = "tag tag-" + kind;
+        span.textContent = text;
+        return span;
+      }
+
+      function setStat(id, value, sub) {
+        document.getElementById(id).textContent = value;
+        document.getElementById(id + "-sub").textContent = sub;
+      }
+
+      function showError(message) {
+        errorBox.textContent = message;
+        errorBox.hidden = false;
+        results.hidden = true;
+        statusLine.textContent = "";
+      }
+
+      function renderRow(item) {
+        const row = item.row;
+        const tr = document.createElement("tr");
+        const productCell = document.createElement("td");
+        const name = document.createElement("span");
+        name.className = "cell-title";
+        const variant = row.values.filter((v) => v && v !== "Default Title").join(" / ");
+        name.textContent = (row.product.title || row.handle) + (variant ? " - " + variant : "");
+        const detail = document.createElement("span");
+        detail.className = "cell-sub";
+        detail.textContent = row.handle + (row.sku ? ", SKU " + row.sku : "");
+        productCell.append(name, detail);
+        tr.append(
+          productCell,
+          priceCell(row.priceCents, row.compareAtCents, "num"),
+          priceCell(item.sale, item.saleCompareAt, "num sale"),
+          cellText(item.discount, "num"),
+          amountCell(row.costCents),
+          amountCell(row.low30Cents)
+        );
+        const checks = document.createElement("td");
+        checks.className = "checks";
+        for (const w of item.warnings) checks.append(tag(w.text, w.kind));
+        if (item.capped) checks.append(tag("Crossed-out price capped at the 30-day low", "info"));
+        if (item.warnings.length === 0 && !item.capped) checks.append(tag("No warnings", "ok"));
+        const notChecked = [];
+        if (row.costCents === null) notChecked.push("cost");
+        if (row.low30Cents === null) notChecked.push("EU 30-day low");
+        if (notChecked.length > 0) {
+          const line = document.createElement("span");
+          line.className = "unchecked";
+          line.textContent = "Not checked: " + notChecked.join(", ");
+          checks.append(line);
+        }
+        tr.append(checks);
+        return tr;
+      }
+
+      function run() {
+        errorBox.hidden = true;
+        const ruleResult = readRule();
+        if (ruleResult.error) {
+          valueError.textContent = ruleResult.error;
+          valueField.setAttribute("aria-invalid", "true");
+          results.hidden = true;
+          statusLine.textContent = "";
+          return;
+        }
+        valueError.textContent = "";
+        valueField.removeAttribute("aria-invalid");
+        const rule = ruleResult.rule;
+
+        const parsed = readRows(csvInput.value || "");
+        if (parsed.fatal) {
+          showError(parsed.fatal);
+          return;
+        }
+        if (parsed.rows.length === 0) {
+          showError("No product rows could be previewed." + (parsed.skipped.length ? " " + parsed.skipped.slice(0, 3).join(" ") : ""));
+          return;
+        }
+        results.hidden = false;
+        const cols = parsed.cols;
+        const items = parsed.rows.map((row) => priceRow(row, rule));
+        const total = items.length;
+        const withWarning = items.filter((it) => it.warnings.length > 0).length;
+        const withCost = parsed.rows.filter((r) => r.costCents !== null).length;
+        const withLow = parsed.rows.filter((r) => r.low30Cents !== null).length;
+        const belowCost = items.filter((it) => it.belowCost).length;
+        const aboveLow = items.filter((it) => it.aboveLow).length;
+        const capped = items.filter((it) => it.capped).length;
+
+        setStat("st-total", String(total), parsed.skipped.length ? plural(parsed.skipped.length, "row", "rows") + " skipped" : "from your file");
+        setStat("st-warn", String(withWarning), withWarning ? "see Checks in the table" : "nothing flagged");
+        if (withCost > 0) {
+          setStat("st-cost", String(belowCost), "cost known for " + withCost + " of " + total);
+        } else {
+          setStat("st-cost", "Not checked", cols.cost ? "no costs in the file" : "no Cost per item column");
+        }
+        if (withLow > 0) {
+          setStat("st-eu", String(aboveLow), "checked for " + withLow + " of " + total + (capped ? ", " + capped + " capped" : ""));
+        } else {
+          setStat("st-eu", "Not checked", cols.low30 ? "no 30-day lows in the file" : "no Lowest 30d price column");
+        }
+
+        const backup = buildBackup(cols, parsed.variants, parsed.noHandleRow);
+        const notes = parsed.skipped.slice(0, 6);
+        if (parsed.skipped.length > 6) notes.push("…and " + plural(parsed.skipped.length - 6, "more row", "more rows") + " skipped.");
+        if (total > TABLE_LIMIT) notes.push("The table shows the first " + TABLE_LIMIT + " of " + total + " variants. The summary counts all of them.");
+        notesList.replaceChildren(...notes.map((text) => {
+          const li = document.createElement("li");
+          li.textContent = text;
+          return li;
+        }));
+
+        const fragment = document.createDocumentFragment();
+        for (const item of items.slice(0, TABLE_LIMIT)) fragment.append(renderRow(item));
+        tableBody.replaceChildren(fragment);
+        tableCaption.textContent = "New prices in " + rule.currency;
+
+        backupBox.value = backup.text;
+        downloadButton.disabled = backup.variants === 0;
+        backupNote.textContent = describeBackup(backup, cols);
+
+        statusLine.textContent = "Previewed " + plural(total, "variant", "variants") + " in " + rule.currency + ": " + withWarning + " with a warning.";
+      }
+
+      // ------------------------------------------------------------------ ?store=<domain> links
+      // Outreach links like /?store=acme.com preload that store's public prices from
+      // stores/catalog-index.json (read earlier from each storefront's public /products.json).
+      // Only stores in that file load; this page never contacts the store or any other site.
+      const storeBanner = document.getElementById("store-banner");
+      const TLD_CURRENCY = [[/\.co\.uk$/, "GBP"], [/\.(com\.)?au$/, "AUD"], [/\.ca$/, "CAD"], [/\.nz$/, "NZD"], [/\.ro$/, "RON"],
+        [/\.ch$/, "CHF"], [/\.se$/, "SEK"], [/\.dk$/, "DKK"], [/\.no$/, "NOK"], [/\.pl$/, "PLN"], [/\.cz$/, "CZK"], [/\.rs$/, "RSD"],
+        [/\.(de|at|nl|be|fr|es|it|ie|pt|fi|gr|sk|si|ee|lv|lt|lu|eu)$/, "EUR"]];
+
+      function normalizeDomain(raw) {
+        const domain = String(raw || "").trim().toLowerCase()
+          .replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[\/?#]/)[0];
+        return /^[a-z0-9.-]{3,120}$/.test(domain) ? domain : "";
+      }
+
+      function catalogCsv(variants) {
+        const lines = ["Title,URL handle,SKU,Price,Compare-at price"];
+        for (const v of variants) {
+          lines.push([v.title, v.handle, v.sku, v.price, v.compare_at].map((x) => csvField(x == null ? "" : String(x))).join(","));
+        }
+        return lines.join("\n");
+      }
+
+      async function loadStoreFromLink(rawDomain, currencyParam) {
+        const domain = normalizeDomain(rawDomain);
+        if (!domain) return false;
+        let index = null;
+        try {
+          const response = await fetch("stores/catalog-index.json", { credentials: "omit" });
+          if (response.ok) index = await response.json();
+        } catch (_) {
+          index = null;
+        }
+        const variants = index && Object.prototype.hasOwnProperty.call(index, domain) && Array.isArray(index[domain]) ? index[domain] : null;
+        if (!variants || variants.length === 0) return false;
+        let currency = CURRENCIES.includes(currencyParam) ? currencyParam : "";
+        let guessed = false;
+        if (!currency) {
+          const match = TLD_CURRENCY.find(([pattern]) => pattern.test(domain));
+          currency = match ? match[1] : "USD";
+          guessed = true;
+        }
+        currencyField.value = currency;
+        window.SAFEREVERT_PRELOADED_STORE = domain;
+        csvInput.value = catalogCsv(variants);
+        fileStatus.textContent = "Showing public prices from " + domain + ".";
+        document.getElementById("store-banner-title").textContent =
+          "Showing " + plural(variants.length, "variant", "variants") + " from " + domain;
+        document.getElementById("store-banner-sub").textContent =
+          "These are a sample of the public prices on your storefront, read from its public product feed, so they may be out of date and aren't your whole catalog. " +
+          (guessed ? "The currency (" + currency + ") is a guess: change it under Sale settings if it's wrong. " : "") +
+          "For the below-cost check, the EU check and a backup file, paste or upload your own product export from Shopify.";
+        storeBanner.hidden = false;
+        updateValueHelp();
+        run();
+        return true;
+      }
+
+      function loadExample() {
+        storeBanner.hidden = true;
+        csvInput.value = EXAMPLE_CSV;
+        fileStatus.textContent = "Showing the example catalog.";
+        run();
+      }
+
+      function downloadBackup() {
+        const content = backupBox.value;
+        if (!content) return;
+        const url = URL.createObjectURL(new Blob([content + "\n"], { type: "text/csv;charset=utf-8" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "saferevert-original-prices-backup.csv";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      let pending = 0;
+      function runSoon() {
+        clearTimeout(pending);
+        pending = setTimeout(run, 250);
+      }
+
+      csvInput.addEventListener("input", () => {
+        fileStatus.textContent = "";
+        storeBanner.hidden = true;
+        runSoon();
+      });
+      valueField.addEventListener("input", runSoon);
+      for (const field of [currencyField, typeField, baseField, endingField, euField]) {
+        field.addEventListener("change", () => {
+          updateValueHelp();
+          run();
+        });
+      }
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          csvInput.value = String(reader.result || "");
+          storeBanner.hidden = true;
+          fileStatus.textContent = "Loaded " + file.name;
+          fileInput.value = "";
+          run();
+        };
+        reader.onerror = () => {
+          fileStatus.textContent = "That file couldn't be read. Try exporting it from Shopify again.";
+        };
+        reader.readAsText(file);
+      });
+      document.getElementById("btn-example").addEventListener("click", loadExample);
+      downloadButton.addEventListener("click", downloadBackup);
+
+      updateValueHelp();
       const params = new URLSearchParams(window.location.search);
+      const discountParam = params.get("discount");
+      if (discountParam && /^\d{1,3}$/.test(discountParam) && Number(discountParam) >= 1 && Number(discountParam) <= 100) {
+        valueField.value = discountParam;
+      }
+      loadExample();
       const storeParam = params.get("store") || params.get("shop") || params.get("domain");
-      if (params.get("discount")) {
-        document.getElementById("discount-val").value = params.get("discount");
-      }
-      if (params.get("round")) {
-        document.getElementById("round-to").value = params.get("round");
-      }
       if (storeParam) {
-        loadStoreByDomain(storeParam);
+        loadStoreFromLink(storeParam, String(params.get("currency") || "").toUpperCase()).then((loaded) => {
+          if (!loaded) fileStatus.textContent = "We don't have public prices for that store yet. Paste or upload your product export instead.";
+        });
       }
     })();
   </script>
