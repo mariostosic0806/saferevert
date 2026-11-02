@@ -414,11 +414,58 @@
     .ea-card label, .ea-card .send-title { color: var(--night); font-weight: 700; }
     .ea-card .optional, .ea-card .help { color: rgba(9, 9, 11, 0.75); }
     .ea-card .help a { color: var(--night); font-weight: 700; }
-    .ea-card input, .ea-card select, .ea-card textarea {
-      background: #ffffff; color: var(--night); border: 1px solid rgba(9, 9, 11, 0.35); border-radius: 16px;
+    .ea-card input, .ea-card select {
+      background: #ffffff; color: var(--night); border: 1px solid rgba(9, 9, 11, 0.28); border-radius: 16px;
+      box-shadow: 0 2px 6px rgba(9, 9, 11, 0.04);
     }
-    .ea-card input:focus, .ea-card select:focus, .ea-card textarea:focus {
+    .ea-card input:focus, .ea-card select:focus {
       border-color: var(--night); box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.2);
+    }
+    .ea-mail-card {
+      background: #ffffff; color: var(--night);
+      border: 1px solid rgba(9, 9, 11, 0.24); border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 10px 24px -12px rgba(9, 9, 11, 0.16);
+      transition: border-color 150ms cubic-bezier(0.2, 0, 0, 1), box-shadow 150ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    .ea-mail-card:focus-within {
+      border-color: var(--night);
+      box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.18), 0 10px 24px -12px rgba(9, 9, 11, 0.16);
+    }
+    .ea-mail-meta {
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-bottom: 1px solid rgba(9, 9, 11, 0.08);
+      font-size: 0.8125rem; line-height: 1.45;
+      display: grid; gap: 4px;
+    }
+    .ea-mail-row {
+      display: flex; align-items: baseline; gap: 8px; min-width: 0;
+    }
+    .ea-mail-key {
+      flex: none; width: 52px; color: #64748b; font-weight: 600;
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .ea-mail-val {
+      color: var(--night); font-weight: 650;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ea-mail-badge {
+      margin-left: auto; flex: none;
+      padding: 2px 8px; border-radius: 9999px;
+      background: #ecfdf5; border: 1px solid rgba(5, 150, 105, 0.28);
+      color: #065f46; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.01em;
+    }
+    textarea.ea-mail-body {
+      display: block; width: 100%; border: 0; border-radius: 0;
+      background: #ffffff; color: #27272a;
+      padding: 11px 14px 13px; margin: 0;
+      font-family: var(--font); font-size: 0.84375rem; line-height: 1.44;
+      resize: none; overflow-y: auto;
+      box-shadow: none;
+    }
+    textarea.ea-mail-body:hover, textarea.ea-mail-body:focus {
+      border: 0; outline: none; box-shadow: none;
     }
     .ea-body { padding: 0; margin: 0; }
     .icon-btn {
@@ -958,7 +1005,20 @@
             </div>
             <div class="field">
               <label for="ea-preview">Email preview</label>
-              <textarea id="ea-preview" class="code" rows="7" readonly spellcheck="false"></textarea>
+              <div class="ea-mail-card">
+                <div class="ea-mail-meta" aria-hidden="true">
+                  <div class="ea-mail-row">
+                    <span class="ea-mail-key">To</span>
+                    <span class="ea-mail-val">mariostosic@prime-tech.rs</span>
+                    <span class="ea-mail-badge">Ready to send</span>
+                  </div>
+                  <div class="ea-mail-row">
+                    <span class="ea-mail-key">Subject</span>
+                    <span class="ea-mail-val" id="ea-subject-preview">SafeRevert BFCM early access</span>
+                  </div>
+                </div>
+                <textarea id="ea-preview" class="ea-mail-body" rows="10" readonly spellcheck="false"></textarea>
+              </div>
             </div>
             <p class="send-title" id="ea-send-title">Send it with</p>
             <div class="ea-send" role="group" aria-labelledby="ea-send-title">
@@ -1023,6 +1083,7 @@
       const sizeField = document.getElementById("ea-size");
       const planField = document.getElementById("ea-plan");
       const emailPreview = document.getElementById("ea-preview");
+      const subjectPreview = document.getElementById("ea-subject-preview");
       const pillText = document.getElementById("ea-pill-text");
       const toast = document.getElementById("toast");
       const PLAN_NAMES = { FREE: "Free", BASIC: "Basic ($9.99 a month)", PRO: "Pro ($19.99 a month)" };
@@ -1073,7 +1134,8 @@
         document.getElementById("ea-outlook").href =
           "https://outlook.office.com/mail/deeplink/compose?to=" + to + "&subject=" + subject + "&body=" + body;
         document.getElementById("ea-mailto").href = "mailto:" + SUPPORT_EMAIL + "?subject=" + subject + "&body=" + body;
-        emailPreview.value = emailText();
+        if (subjectPreview) subjectPreview.textContent = email.subject;
+        emailPreview.value = email.body;
       }
 
       function computeRadialCoords(sourceEl) {
@@ -1185,6 +1247,8 @@
         }
         if (!copied) {
           // file:// pages and older browsers: copy the selected email preview instead.
+          const prevBody = emailPreview.value;
+          emailPreview.value = emailText();
           emailPreview.focus();
           emailPreview.select();
           try {
@@ -1192,6 +1256,7 @@
           } catch (_) {
             copied = false;
           }
+          emailPreview.value = prevBody;
         }
         showToast(copied ? "Copied to clipboard!" : "Select the email preview and copy it.");
       }
