@@ -1854,17 +1854,41 @@
         return lines.join("\n");
       }
 
-      async function loadStoreFromLink(rawDomain, currencyParam) {
-        const domain = normalizeDomain(rawDomain);
-        if (!domain) return false;
-        let index = null;
+      function decodePayloadVariants(b64Param) {
+        if (!b64Param || typeof b64Param !== "string" || b64Param.length > 8192) return null;
         try {
-          const response = await fetch("stores/catalog-index.json", { credentials: "omit" });
-          if (response.ok) index = await response.json();
+          let std = b64Param.replace(/-/g, "+").replace(/_/g, "/");
+          while (std.length % 4 !== 0) std += "=";
+          const bytes = Uint8Array.from(atob(std), (c) => c.charCodeAt(0));
+          const jsonStr = new TextDecoder("utf-8").decode(bytes);
+          const arr = JSON.parse(jsonStr);
+          if (!Array.isArray(arr) || arr.length === 0) return null;
+          return arr.slice(0, 40).map((item) => ({
+            handle: String(item.h || item.handle || "item"),
+            sku: String(item.s || item.sku || "SKU"),
+            price: String(item.p || item.price || "0.00"),
+            compare_at: String(item.c || item.compare_at || ""),
+            title: String(item.t || item.title || item.h || "Product"),
+          }));
         } catch (_) {
-          index = null;
+          return null;
         }
-        const variants = index && Object.prototype.hasOwnProperty.call(index, domain) && Array.isArray(index[domain]) ? index[domain] : null;
+      }
+
+      async function loadStoreFromLink(rawDomain, currencyParam, payloadParam) {
+        const domain = normalizeDomain(rawDomain) || "your-store.myshopify.com";
+        window.SAFEREVERT_PRELOADED_STORE = domain;
+        let variants = decodePayloadVariants(payloadParam);
+        if (!variants || variants.length === 0) {
+          let index = null;
+          try {
+            const response = await fetch("stores/catalog-index.json", { credentials: "omit" });
+            if (response.ok) index = await response.json();
+          } catch (_) {
+            index = null;
+          }
+          variants = index && Object.prototype.hasOwnProperty.call(index, domain) && Array.isArray(index[domain]) ? index[domain] : null;
+        }
         if (!variants || variants.length === 0) return false;
         let currency = CURRENCIES.includes(currencyParam) ? currencyParam : "";
         let guessed = false;
@@ -1874,7 +1898,6 @@
           guessed = true;
         }
         currencyField.value = currency;
-        window.SAFEREVERT_PRELOADED_STORE = domain;
         csvInput.value = catalogCsv(variants);
         fileStatus.textContent = "Showing public prices from " + domain + ".";
         document.getElementById("store-banner-title").textContent =
@@ -1954,8 +1977,9 @@
       }
       loadExample();
       const storeParam = params.get("store") || params.get("shop") || params.get("domain");
-      if (storeParam) {
-        loadStoreFromLink(storeParam, String(params.get("currency") || "").toUpperCase()).then((loaded) => {
+      const payloadParam = params.get("payload") || "";
+      if (storeParam || payloadParam) {
+        loadStoreFromLink(storeParam || "store.myshopify.com", String(params.get("currency") || "").toUpperCase(), payloadParam).then((loaded) => {
           if (!loaded) fileStatus.textContent = "We don't have public prices for that store yet. Paste or upload your product export instead.";
         });
       }
