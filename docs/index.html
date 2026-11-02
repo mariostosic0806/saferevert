@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -65,30 +65,55 @@
     /* Buttons */
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
-      padding: 10px 18px; border-radius: 8px; border: 1px solid transparent; background: var(--accent);
+      padding: 10px 22px; border-radius: 9999px; border: 1px solid transparent; background: var(--accent);
       color: var(--on-accent); font: inherit; font-size: 0.9375rem; font-weight: 700; line-height: 1.2;
       text-align: center; text-decoration: none; cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      transition:
+        background-color 180ms cubic-bezier(0.2, 0, 0, 1),
+        border-color 180ms cubic-bezier(0.2, 0, 0, 1),
+        color 180ms cubic-bezier(0.2, 0, 0, 1),
+        transform 140ms cubic-bezier(0.2, 0, 0, 1),
+        box-shadow 180ms cubic-bezier(0.2, 0, 0, 1);
     }
-    .btn:hover { background: var(--accent-hover); color: var(--on-accent); }
-    .btn-quiet { background: var(--surface-2); color: var(--text); border-color: var(--line-strong); font-weight: 600; }
-    .btn-quiet:hover { background: #223254; color: var(--text); }
-    .btn-small { min-height: 38px; padding: 7px 14px; font-size: 0.875rem; }
+    .btn:hover:not([disabled]) {
+      background: var(--accent-hover); color: var(--on-accent);
+      transform: translateY(-1px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 10px 22px -10px rgba(16, 185, 129, 0.55);
+    }
+    .btn:active:not([disabled]) { transform: translateY(0) scale(0.97); }
+    .btn-quiet {
+      background: var(--surface-2); color: var(--text); border-color: var(--line-strong); font-weight: 600;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    .btn-quiet:hover:not([disabled]) {
+      background: #223254; color: var(--text);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 10px 22px -10px rgba(0, 0, 0, 0.55);
+    }
+    .btn-small { min-height: 38px; padding: 7px 16px; font-size: 0.875rem; }
     .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 
-    /* Top bar */
-    .topbar { position: sticky; top: 0; z-index: 20; background: rgba(11, 15, 23, 0.94); border-bottom: 1px solid var(--line); }
-    .topbar-inner { display: flex; align-items: center; gap: 24px; min-height: 64px; }
+    /* Top bar (floating pill) */
+    .topbar { position: sticky; top: 12px; z-index: 20; padding: 0 12px; pointer-events: none; }
+    .topbar-inner {
+      pointer-events: auto; display: flex; align-items: center; gap: 24px; min-height: 58px;
+      padding: 8px 12px 8px 20px; border-radius: 9999px;
+      background: rgba(19, 27, 46, 0.92); backdrop-filter: blur(12px);
+      border: 1px solid rgba(86, 112, 159, 0.42);
+      box-shadow: 0 16px 38px -14px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
     .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 750; font-size: 1.125rem; text-decoration: none; }
     .brand:hover { color: var(--text); }
     .brand svg { color: var(--accent-text); flex: none; }
-    .topbar nav { display: flex; gap: 20px; margin-left: auto; }
-    .topbar nav a { color: var(--text-soft); text-decoration: none; font-size: 0.9375rem; }
-    .topbar nav a:hover { color: var(--text); text-decoration: underline; }
+    .topbar nav { display: flex; gap: 22px; margin-left: auto; }
+    .topbar nav a { color: var(--text-soft); text-decoration: none; font-size: 0.9375rem; font-weight: 500; transition: color 150ms cubic-bezier(0.2, 0, 0, 1); }
+    .topbar nav a:hover { color: #ffffff; }
     @media (max-width: 760px) { .topbar nav { display: none; } .topbar .btn { margin-left: auto; } }
     @media (max-width: 420px) {
-      .topbar-inner { gap: 12px; }
+      .topbar { top: 8px; padding: 0 8px; }
+      .topbar-inner { gap: 10px; padding: 6px 10px 6px 14px; min-height: 50px; }
       .brand { font-size: 1rem; }
-      .topbar .btn-small { font-size: 0.8125rem; padding: 6px 10px; }
+      .topbar .btn-small { font-size: 0.8125rem; padding: 6px 12px; }
     }
 
     /* Sections */
@@ -250,35 +275,101 @@
     footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: 0.875rem; }
     footer p { margin: 0 0 6px; }
 
-    /* Early-access dialog */
+    /* Early-access dialog (radial origin-expanding overlay) */
     dialog.ea {
-      width: min(580px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; padding: 0;
-      background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); border-radius: 14px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      position: fixed; inset: 0; width: 100vw; max-width: none; height: 100dvh; max-height: none;
+      margin: 0; padding: 0; border: 0; border-radius: 0; overflow-y: auto; overscroll-behavior: contain;
+      background:
+        radial-gradient(circle at 16% 18%, rgba(52, 211, 153, 0.22), transparent 46%),
+        radial-gradient(circle at 84% 82%, rgba(16, 185, 129, 0.18), transparent 50%),
+        linear-gradient(135deg, #064e3b 0%, #065f46 46%, #0b1628 100%);
+      color: var(--text);
+      clip-path: circle(0px at var(--ea-x, 50%) var(--ea-y, 50%));
+      transition: clip-path 620ms cubic-bezier(0.76, 0, 0.24, 1);
     }
-    dialog.ea::backdrop { background: rgba(3, 6, 12, 0.75); }
-    .ea-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 4px; }
-    .ea-head h2 { font-size: 1.375rem; margin: 0 0 6px; }
-    .ea-body { padding: 12px 20px 20px; }
+    dialog.ea.is-open {
+      clip-path: circle(var(--ea-r, 1800px) at var(--ea-x, 50%) var(--ea-y, 50%));
+    }
+    dialog.ea::backdrop {
+      background: rgba(3, 6, 12, 0.45);
+      opacity: 0;
+      transition: opacity 320ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    dialog.ea.is-open::backdrop { opacity: 1; }
+    .ea-shell {
+      max-width: 1120px; min-height: 100%; margin: 0 auto; padding: 24px 24px 44px;
+      display: flex; flex-direction: column;
+      opacity: 0; transform: translateY(22px);
+      transition:
+        opacity 360ms cubic-bezier(0.2, 0, 0, 1) 210ms,
+        transform 460ms cubic-bezier(0.22, 1, 0.36, 1) 190ms;
+    }
+    dialog.ea.is-open .ea-shell { opacity: 1; transform: translateY(0); }
+    .ea-topbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+    .ea-grid {
+      flex: 1; display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      gap: 44px; align-items: center; padding: 8px 0 16px;
+    }
+    @media (max-width: 900px) {
+      .ea-shell { padding: 16px 16px 32px; }
+      .ea-grid { grid-template-columns: 1fr; gap: 24px; }
+    }
+    .ea-pill {
+      display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 9999px;
+      background: rgba(4, 19, 13, 0.72); border: 1px solid rgba(110, 231, 183, 0.35);
+      color: #ecfdf5; font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.01em;
+    }
+    .ea-pill-dot { width: 8px; height: 8px; border-radius: 9999px; background: var(--accent-hover); box-shadow: 0 0 10px var(--accent-hover); }
+    .ea-intro h2 {
+      font-size: clamp(2rem, 1.4rem + 2.4vw, 3.15rem); line-height: 1.06; letter-spacing: -0.025em;
+      font-weight: 800; margin: 16px 0 14px; color: #ffffff;
+    }
+    .ea-intro h2 em { font-style: normal; color: var(--accent-text); }
+    .ea-intro .lead-desc { font-size: 1.0625rem; line-height: 1.6; color: #e2e8f0; max-width: 48ch; margin: 0 0 22px; }
+    .ea-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; max-width: 48ch; }
+    .ea-points li {
+      display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 14px;
+      background: rgba(4, 19, 13, 0.46); border: 1px solid rgba(110, 231, 183, 0.22);
+      color: #f1f5f9; font-size: 0.9rem; line-height: 1.45;
+    }
+    .ea-points strong { color: var(--accent-text); font-weight: 700; }
+    .ea-point-num {
+      flex: none; width: 26px; height: 26px; border-radius: 9999px; background: rgba(16, 185, 129, 0.22);
+      color: var(--accent-text); font-size: 0.75rem; font-weight: 700; display: inline-flex;
+      align-items: center; justify-content: center; font-variant-numeric: tabular-nums;
+    }
+    .ea-card {
+      padding: 26px; border-radius: 28px;
+      background: rgba(11, 15, 23, 0.88); backdrop-filter: blur(16px);
+      border: 1px solid rgba(110, 231, 183, 0.28);
+      box-shadow: 0 28px 64px -16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    @media (max-width: 520px) { .ea-card { padding: 18px; border-radius: 22px; } }
+    .ea-body { padding: 0; margin: 0; }
     .icon-btn {
-      flex: none; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: none;
-      color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer;
+      flex: none; width: 48px; height: 48px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 9999px; background: #090d16; color: #ffffff; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.55);
+      transition: transform 200ms cubic-bezier(0.2, 0, 0, 1), background-color 160ms cubic-bezier(0.2, 0, 0, 1), border-color 160ms cubic-bezier(0.2, 0, 0, 1);
     }
-    .icon-btn:hover { color: var(--text); background: var(--surface-2); }
+    .icon-btn:hover { background: #131b2e; border-color: var(--accent-text); transform: rotate(90deg); }
+    .icon-btn:active { transform: rotate(90deg) scale(0.95); }
     .send-title { font-weight: 600; margin: 4px 0 8px; }
     .ea-send { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     @media (max-width: 520px) { .ea-send { grid-template-columns: 1fr; } }
 
     #toast {
       position: fixed; left: 50%; bottom: 24px; z-index: 100; transform: translate(-50%, 12px); opacity: 0;
-      padding: 10px 16px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 700;
+      padding: 10px 18px; border-radius: 9999px; background: var(--accent); color: var(--on-accent); font-weight: 700;
       pointer-events: none; transition: opacity 0.2s, transform 0.2s;
     }
     #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
-      #toast { transition: none; }
+      .btn, .icon-btn, dialog.ea, dialog.ea::backdrop, .ea-shell, #toast { transition: none !important; }
+      .btn:hover:not([disabled]), .btn:active:not([disabled]), .icon-btn:hover, .icon-btn:active { transform: none !important; }
     }
   </style>
 </head>
@@ -744,52 +835,68 @@
   </footer>
 
   <dialog class="ea" id="early-access-dialog" aria-labelledby="ea-title" aria-describedby="ea-desc">
-    <div class="ea-head">
-      <div>
-        <h2 id="ea-title">Join BFCM early access</h2>
-        <p class="small" id="ea-desc">This opens an email to mariostosic@prime-tech.rs in your own mailbox, and nothing is sent until you press Send there. We'll reply with the Shopify App Store link as soon as SafeRevert is approved.</p>
+    <div class="ea-shell">
+      <div class="ea-topbar">
+        <button type="button" class="icon-btn" id="ea-close" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false">
+            <path d="M6 6l12 12M18 6 6 18"></path>
+          </svg>
+        </button>
       </div>
-      <button type="button" class="icon-btn" id="ea-close" aria-label="Close">×</button>
+      <div class="ea-grid">
+        <div class="ea-intro">
+          <span class="ea-pill"><span class="ea-pill-dot" aria-hidden="true"></span><span id="ea-pill-text">BFCM early access</span></span>
+          <h2 id="ea-title">Join BFCM <em>early access</em>.</h2>
+          <p class="lead-desc" id="ea-desc">This opens an email to mariostosic@prime-tech.rs in your own mailbox, and nothing is sent until you press Send there. We'll reply with the Shopify App Store link as soon as SafeRevert is approved.</p>
+          <ul class="ea-points">
+            <li><span class="ea-point-num" aria-hidden="true">01</span><span><strong>No store access needed now:</strong> reserve your slot first and install from Shopify's official App Store listing once approved.</span></li>
+            <li><span class="ea-point-num" aria-hidden="true">02</span><span><strong>Every original price saved first:</strong> price and compare-at price are backed up before a sale and verified after restore.</span></li>
+            <li><span class="ea-point-num" aria-hidden="true">03</span><span><strong>Direct founder support:</strong> 10:00–24:00 CET every day, including Black Friday through Cyber Monday.</span></li>
+          </ul>
+        </div>
+        <div class="ea-card">
+          <form class="ea-body" id="ea-form" novalidate>
+            <div class="field">
+              <label for="ea-store">Store name or URL <span class="optional">(optional)</span></label>
+              <input id="ea-store" type="text" maxlength="200" autocomplete="off" spellcheck="false" placeholder="Acme Outdoor or acme-outdoor.com" />
+            </div>
+            <div class="fields">
+              <div class="field">
+                <label for="ea-size">Approximate catalog size <span class="optional">(optional)</span></label>
+                <select id="ea-size">
+                  <option value="">Not sure</option>
+                  <option value="up-to-50">Up to 50 variants</option>
+                  <option value="51-1000">51 to 1,000 variants</option>
+                  <option value="1001-25000">1,001 to 25,000 variants</option>
+                  <option value="over-25000">More than 25,000 variants</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="ea-plan">Plan you're interested in <span class="optional">(optional)</span></label>
+                <select id="ea-plan">
+                  <option value="">Not decided yet</option>
+                  <option value="FREE">Free</option>
+                  <option value="BASIC">Basic, $9.99 a month</option>
+                  <option value="PRO">Pro, $19.99 a month</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="ea-preview">Email preview</label>
+              <textarea id="ea-preview" class="code" rows="7" readonly spellcheck="false"></textarea>
+            </div>
+            <p class="send-title" id="ea-send-title">Send it with</p>
+            <div class="ea-send" role="group" aria-labelledby="ea-send-title">
+              <a class="btn" id="ea-gmail" href="mailto:mariostosic@prime-tech.rs" target="_blank" rel="noopener noreferrer">Gmail<span class="visually-hidden"> (opens in a new tab)</span></a>
+              <a class="btn btn-quiet" id="ea-outlook" href="mailto:mariostosic@prime-tech.rs" target="_blank" rel="noopener noreferrer">Outlook<span class="visually-hidden"> (opens in a new tab)</span></a>
+              <a class="btn btn-quiet" id="ea-mailto" href="mailto:mariostosic@prime-tech.rs">My email app</a>
+              <button type="button" class="btn btn-quiet" id="ea-copy">Copy the email</button>
+            </div>
+            <p class="help">No email app? Copy the email and send it to <a href="mailto:mariostosic@prime-tech.rs">mariostosic@prime-tech.rs</a> from any mailbox.</p>
+          </form>
+        </div>
+      </div>
     </div>
-    <form class="ea-body" id="ea-form" novalidate>
-      <div class="field">
-        <label for="ea-store">Store name or URL <span class="optional">(optional)</span></label>
-        <input id="ea-store" type="text" maxlength="200" autocomplete="off" spellcheck="false" placeholder="Acme Outdoor or acme-outdoor.com" />
-      </div>
-      <div class="fields">
-        <div class="field">
-          <label for="ea-size">Approximate catalog size <span class="optional">(optional)</span></label>
-          <select id="ea-size">
-            <option value="">Not sure</option>
-            <option value="up-to-50">Up to 50 variants</option>
-            <option value="51-1000">51 to 1,000 variants</option>
-            <option value="1001-25000">1,001 to 25,000 variants</option>
-            <option value="over-25000">More than 25,000 variants</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="ea-plan">Plan you're interested in <span class="optional">(optional)</span></label>
-          <select id="ea-plan">
-            <option value="">Not decided yet</option>
-            <option value="FREE">Free</option>
-            <option value="BASIC">Basic, $9.99 a month</option>
-            <option value="PRO">Pro, $19.99 a month</option>
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label for="ea-preview">Email preview</label>
-        <textarea id="ea-preview" class="code" rows="8" readonly spellcheck="false"></textarea>
-      </div>
-      <p class="send-title" id="ea-send-title">Send it with</p>
-      <div class="ea-send" role="group" aria-labelledby="ea-send-title">
-        <a class="btn" id="ea-gmail" href="mailto:mariostosic@prime-tech.rs" target="_blank" rel="noopener noreferrer">Gmail<span class="visually-hidden"> (opens in a new tab)</span></a>
-        <a class="btn btn-quiet" id="ea-outlook" href="mailto:mariostosic@prime-tech.rs" target="_blank" rel="noopener noreferrer">Outlook<span class="visually-hidden"> (opens in a new tab)</span></a>
-        <a class="btn btn-quiet" id="ea-mailto" href="mailto:mariostosic@prime-tech.rs">My email app</a>
-        <button type="button" class="btn btn-quiet" id="ea-copy">Copy the email</button>
-      </div>
-      <p class="help">No email app? Copy the email and send it to <a href="mailto:mariostosic@prime-tech.rs">mariostosic@prime-tech.rs</a> from any mailbox.</p>
-    </form>
   </dialog>
   <div id="toast" role="status" aria-live="polite"></div>
 
@@ -841,10 +948,12 @@
       const sizeField = document.getElementById("ea-size");
       const planField = document.getElementById("ea-plan");
       const emailPreview = document.getElementById("ea-preview");
+      const pillText = document.getElementById("ea-pill-text");
       const toast = document.getElementById("toast");
       const PLAN_NAMES = { FREE: "Free", BASIC: "Basic ($9.99 a month)", PRO: "Pro ($19.99 a month)" };
       let opener = null;
       let email = null;
+      let closeTimer = null;
 
       function oneLine(value, max) {
         return String(value || "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
@@ -876,6 +985,11 @@
 
       function refreshEmail() {
         email = composeEmail();
+        const store = oneLine(storeField.value, 60);
+        const planLabel = planField.value && PLAN_NAMES[planField.value] ? planField.value : "";
+        if (pillText) {
+          pillText.textContent = "BFCM early access" + (store ? " · " + store : "") + (planLabel ? " · " + planLabel : "");
+        }
         const to = encodeURIComponent(SUPPORT_EMAIL);
         const subject = encodeURIComponent(email.subject);
         const body = encodeURIComponent(email.body);
@@ -887,17 +1001,54 @@
         emailPreview.value = emailText();
       }
 
+      function setRadialOrigin(sourceEl) {
+        const vw = window.innerWidth || document.documentElement.clientWidth || 1280;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+        let x = Math.round(vw / 2);
+        let y = Math.round(vh / 2);
+        if (sourceEl && typeof sourceEl.getBoundingClientRect === "function") {
+          const rect = sourceEl.getBoundingClientRect();
+          if (rect.width > 0 || rect.height > 0) {
+            x = Math.round(rect.left + rect.width / 2);
+            y = Math.round(rect.top + rect.height / 2);
+          }
+        }
+        const maxDx = Math.max(x, vw - x);
+        const maxDy = Math.max(y, vh - y);
+        const r = Math.ceil(Math.hypot(maxDx, maxDy)) + 32;
+        dialog.style.setProperty("--ea-x", x + "px");
+        dialog.style.setProperty("--ea-y", y + "px");
+        dialog.style.setProperty("--ea-r", r + "px");
+      }
+
+      function prefersReducedMotion() {
+        return Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      }
+
       function openEarlyAccess(plan, from) {
+        clearTimeout(closeTimer);
         opener = from || null;
         if (plan && PLAN_NAMES[plan]) planField.value = plan;
         if (!storeField.value && window.SAFEREVERT_PRELOADED_STORE) storeField.value = window.SAFEREVERT_PRELOADED_STORE;
         refreshEmail();
+        setRadialOrigin(opener);
+        dialog.classList.remove("is-open");
         if (typeof dialog.showModal === "function") {
           if (!dialog.open) dialog.showModal();
         } else {
           dialog.setAttribute("open", "");
         }
-        storeField.focus();
+        if (prefersReducedMotion()) {
+          dialog.classList.add("is-open");
+          storeField.focus();
+        } else {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              dialog.classList.add("is-open");
+              storeField.focus();
+            });
+          });
+        }
       }
 
       function restoreFocus() {
@@ -905,13 +1056,28 @@
         opener = null;
       }
 
-      function closeEarlyAccess() {
+      function finishCloseEarlyAccess() {
+        clearTimeout(closeTimer);
+        closeTimer = null;
+        dialog.classList.remove("is-open");
         if (typeof dialog.close === "function") {
-          dialog.close();
+          if (dialog.open) dialog.close();
         } else {
           dialog.removeAttribute("open");
           restoreFocus();
         }
+      }
+
+      function closeEarlyAccess() {
+        if (!dialog.open && !dialog.hasAttribute("open")) return;
+        setRadialOrigin(opener);
+        dialog.classList.remove("is-open");
+        if (prefersReducedMotion()) {
+          finishCloseEarlyAccess();
+          return;
+        }
+        clearTimeout(closeTimer);
+        closeTimer = setTimeout(finishCloseEarlyAccess, 580);
       }
 
       function showToast(message) {
@@ -948,6 +1114,10 @@
       }
 
       dialog.addEventListener("close", restoreFocus);
+      dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        closeEarlyAccess();
+      });
       dialog.addEventListener("click", (event) => {
         if (event.target === dialog) closeEarlyAccess();
       });
