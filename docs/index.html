@@ -245,7 +245,7 @@
     .backup .help { max-width: 78ch; }
     #backup-help { margin: 0 0 12px; }
 
-    /* Pricing (cards with dark featured middle card) */
+    /* Pricing (cards with a dark featured middle card) */
     .plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 32px; }
     @media (max-width: 860px) { .plans { grid-template-columns: 1fr; } }
     .plan {
@@ -326,7 +326,7 @@
     }
     .tested { margin-top: 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 28px; padding: 28px; max-width: 940px; }
 
-    /* Early access dark card section  */
+    /* Early access dark card section */
     .cta-block {
       background: var(--night); color: #ffffff; border-radius: 32px; padding: 48px;
       position: relative; overflow: hidden;
@@ -1549,10 +1549,8 @@
           if (candidates.length > 0) {
             candidates.sort((a, b) => Math.abs(a - raw) - Math.abs(b - raw) || a - b);
             sale = candidates[0];
-          } else {
-            sale = 1;
-            floored = true;
           }
+          // No price with that ending fits (an item under 1.00): the unrounded price stays, as in the app.
         }
         const warnings = [];
         if (floored) warnings.push({ kind: "warn", text: "Raised to the 0.01 minimum" });
