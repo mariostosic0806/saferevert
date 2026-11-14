@@ -88,11 +88,11 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 12px 24px -10px rgba(9, 9, 11, 0.55);
     }
     .btn:active:not([disabled]) { transform: translateY(0) scale(0.97); }
-    .hero-actions .btn:first-child, .store-banner .btn, .cta-block .btn {
+    .hero-actions .btn:first-child, .cta-block .btn {
       background: var(--accent); color: #ffffff;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 10px 24px -10px rgba(5, 150, 105, 0.55);
     }
-    .hero-actions .btn:first-child:hover:not([disabled]), .store-banner .btn:hover:not([disabled]), .cta-block .btn:hover:not([disabled]) {
+    .hero-actions .btn:first-child:hover:not([disabled]), .cta-block .btn:hover:not([disabled]) {
       background: var(--accent-hover); color: #ffffff;
     }
     .btn-quiet {
@@ -211,14 +211,6 @@
     @media (max-width: 640px) { .tool { padding: 18px; border-radius: 22px; } }
     .tool-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 32px; }
     @media (max-width: 920px) { .tool-grid { grid-template-columns: 1fr; gap: 20px; } }
-    .store-banner {
-      margin: 0 0 22px; padding: 18px 22px; border-radius: 22px;
-      border: 1px solid rgba(5, 150, 105, 0.35); background: #ecfdf5;
-      display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: center; justify-content: space-between;
-    }
-    .store-banner[hidden] { display: none; }
-    .store-banner p { margin: 0; color: #064e3b; }
-    .store-banner .small { margin-top: 4px; max-width: 70ch; color: #065f46; }
     .alert { margin: 16px 0 0; padding: 12px 16px; border-radius: 14px; background: #fef2f2; border: 1px solid #ef4444; color: #991b1b; font-weight: 500; }
     .status { margin: 20px 0 0; font-weight: 650; color: var(--night); }
     .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0 0; }
@@ -705,13 +697,6 @@
         <h2 id="preview-title">Try the price preview on your own products</h2>
         <p class="lead">Paste or upload a product export from Shopify and pick a discount to see each new price and its checks, calculated the same way the app calculates them. Everything runs in this browser tab: your file isn't uploaded anywhere, and nothing in your store changes.</p>
         <noscript><p class="alert">The price preview needs JavaScript turned on.</p></noscript>
-        <div class="store-banner" id="store-banner" role="status" hidden>
-          <div>
-            <p><strong id="store-banner-title"></strong></p>
-            <p class="small" id="store-banner-sub"></p>
-          </div>
-          <a class="btn" data-cta href="mailto:mariostosic@prime-tech.rs?subject=SafeRevert%20BFCM%20early%20access">Join BFCM early access</a>
-        </div>
 
         <div class="tool">
           <div class="tool-grid">
@@ -904,7 +889,7 @@
             <dt>Support hours</dt>
             <dd>Every day, including Black Friday to Cyber Monday: 10:00–24:00 Central European Time (Belgrade), which is 04:00–18:00 US Eastern. Outside these hours your scheduled sales still start and end on their own, and ending a sale or restoring all prices works in the app at any time.</dd>
           </div>
-          <div><dt>Hosting</dt><dd>Amsterdam, Netherlands (EU)</dd></div>
+          <div><dt>Hosting</dt><dd>Railway, in Amsterdam, Netherlands (EU)</dd></div>
           <div><dt>Access to your store</dt><dd>Read and edit products only. SafeRevert can't see orders or customers.</dd></div>
           <div><dt>What SafeRevert stores</dt><dd>Product and variant IDs, SKUs, URL handles, prices and unit costs, a price record for the EU 30-day rule, your sales and plan, and the access token Shopify issues to SafeRevert. No customer data.</dd></div>
           <div><dt>Payments</dt><dd>Plans are billed by Shopify. SafeRevert never sees your payment details.</dd></div>
@@ -1164,7 +1149,6 @@
         clearTimeout(closeTimer);
         opener = from || null;
         if (plan && PLAN_NAMES[plan]) planField.value = plan;
-        if (!storeField.value && window.SAFEREVERT_PRELOADED_STORE) storeField.value = window.SAFEREVERT_PRELOADED_STORE;
         refreshEmail();
         const { x, y, r } = computeRadialCoords(opener);
         dialog.classList.remove("is-open");
@@ -1831,89 +1815,7 @@
         statusLine.textContent = "Previewed " + plural(total, "variant", "variants") + " in " + rule.currency + ": " + withWarning + " with a warning.";
       }
 
-      // ------------------------------------------------------------------ ?store=<domain> links
-      // Outreach links like /?store=acme.com preload that store's public prices from
-      // stores/catalog-index.json (read earlier from each storefront's public /products.json).
-      // Only stores in that file load; this page never contacts the store or any other site.
-      const storeBanner = document.getElementById("store-banner");
-      const TLD_CURRENCY = [[/\.co\.uk$/, "GBP"], [/\.(com\.)?au$/, "AUD"], [/\.ca$/, "CAD"], [/\.nz$/, "NZD"], [/\.ro$/, "RON"],
-        [/\.ch$/, "CHF"], [/\.se$/, "SEK"], [/\.dk$/, "DKK"], [/\.no$/, "NOK"], [/\.pl$/, "PLN"], [/\.cz$/, "CZK"], [/\.rs$/, "RSD"],
-        [/\.(de|at|nl|be|fr|es|it|ie|pt|fi|gr|sk|si|ee|lv|lt|lu|eu)$/, "EUR"]];
-
-      function normalizeDomain(raw) {
-        const domain = String(raw || "").trim().toLowerCase()
-          .replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[\/?#]/)[0];
-        return /^[a-z0-9.-]{3,120}$/.test(domain) ? domain : "";
-      }
-
-      function catalogCsv(variants) {
-        const lines = ["Title,URL handle,SKU,Price,Compare-at price"];
-        for (const v of variants) {
-          lines.push([v.title, v.handle, v.sku, v.price, v.compare_at].map((x) => csvField(x == null ? "" : String(x))).join(","));
-        }
-        return lines.join("\n");
-      }
-
-      function decodePayloadVariants(b64Param) {
-        if (!b64Param || typeof b64Param !== "string" || b64Param.length > 8192) return null;
-        try {
-          let std = b64Param.replace(/-/g, "+").replace(/_/g, "/");
-          while (std.length % 4 !== 0) std += "=";
-          const bytes = Uint8Array.from(atob(std), (c) => c.charCodeAt(0));
-          const jsonStr = new TextDecoder("utf-8").decode(bytes);
-          const arr = JSON.parse(jsonStr);
-          if (!Array.isArray(arr) || arr.length === 0) return null;
-          return arr.slice(0, 40).map((item) => ({
-            handle: String(item.h || item.handle || "item"),
-            sku: String(item.s || item.sku || "SKU"),
-            price: String(item.p || item.price || "0.00"),
-            compare_at: String(item.c || item.compare_at || ""),
-            title: String(item.t || item.title || item.h || "Product"),
-          }));
-        } catch (_) {
-          return null;
-        }
-      }
-
-      async function loadStoreFromLink(rawDomain, currencyParam, payloadParam) {
-        const domain = normalizeDomain(rawDomain) || "your-store.myshopify.com";
-        window.SAFEREVERT_PRELOADED_STORE = domain;
-        let variants = decodePayloadVariants(payloadParam);
-        if (!variants || variants.length === 0) {
-          let index = null;
-          try {
-            const response = await fetch("stores/catalog-index.json", { credentials: "omit" });
-            if (response.ok) index = await response.json();
-          } catch (_) {
-            index = null;
-          }
-          variants = index && Object.prototype.hasOwnProperty.call(index, domain) && Array.isArray(index[domain]) ? index[domain] : null;
-        }
-        if (!variants || variants.length === 0) return false;
-        let currency = CURRENCIES.includes(currencyParam) ? currencyParam : "";
-        let guessed = false;
-        if (!currency) {
-          const match = TLD_CURRENCY.find(([pattern]) => pattern.test(domain));
-          currency = match ? match[1] : "USD";
-          guessed = true;
-        }
-        currencyField.value = currency;
-        csvInput.value = catalogCsv(variants);
-        fileStatus.textContent = "Showing public prices from " + domain + ".";
-        document.getElementById("store-banner-title").textContent =
-          "Showing " + plural(variants.length, "variant", "variants") + " from " + domain;
-        document.getElementById("store-banner-sub").textContent =
-          "These are a sample of the public prices on your storefront, read from its public product feed, so they may be out of date and aren't your whole catalog. " +
-          (guessed ? "The currency (" + currency + ") is a guess: change it under Sale settings if it's wrong. " : "") +
-          "For the below-cost check, the EU check and a backup file, paste or upload your own product export from Shopify.";
-        storeBanner.hidden = false;
-        updateValueHelp();
-        run();
-        return true;
-      }
-
       function loadExample() {
-        storeBanner.hidden = true;
         csvInput.value = EXAMPLE_CSV;
         fileStatus.textContent = "Showing the example catalog.";
         run();
@@ -1940,7 +1842,6 @@
 
       csvInput.addEventListener("input", () => {
         fileStatus.textContent = "";
-        storeBanner.hidden = true;
         runSoon();
       });
       valueField.addEventListener("input", runSoon);
@@ -1956,7 +1857,6 @@
         const reader = new FileReader();
         reader.onload = () => {
           csvInput.value = String(reader.result || "");
-          storeBanner.hidden = true;
           fileStatus.textContent = "Loaded " + file.name;
           fileInput.value = "";
           run();
@@ -1976,13 +1876,6 @@
         valueField.value = discountParam;
       }
       loadExample();
-      const storeParam = params.get("store") || params.get("shop") || params.get("domain");
-      const payloadParam = params.get("payload") || "";
-      if (storeParam || payloadParam) {
-        loadStoreFromLink(storeParam || "store.myshopify.com", String(params.get("currency") || "").toUpperCase(), payloadParam).then((loaded) => {
-          if (!loaded) fileStatus.textContent = "We don't have public prices for that store yet. Paste or upload your product export instead.";
-        });
-      }
     })();
   </script>
 </body>
