@@ -662,7 +662,7 @@
             <details>
               <summary>Does SafeRevert see my customers or orders?</summary>
               <div class="answer">
-                <p>No. SafeRevert asks Shopify only for permission to read and edit products, so it can't see orders or customers, and it stores no customer data.</p>
+                <p>No. SafeRevert asks Shopify only for permission to read and edit products and read inventory (variant unit cost only for below-cost margin checks), so it can't see orders or customers, and it stores no customer data.</p>
               </div>
             </details>
           </div>
@@ -811,7 +811,7 @@
 
             <div class="backup">
               <label for="backup-output">Backup of original prices — test the import on one product first</label>
-              <p class="help" id="backup-help">Made from the export above, in Shopify's import format: each variant's price and compare-at price as they are now. Importing it also sets each product's title, option names and values, and SKUs back to what they are in this export. We haven't tested importing this file into Shopify yet, so before you rely on it, test it on one product: import a copy that keeps only the header row and that product's rows, with Shopify's option to overwrite products with matching handles, and check that the product's variants and prices come out right. In the app you don't need this file: SafeRevert restores prices itself when a sale ends.</p>
+              <p class="help" id="backup-help">Made from the export above in Shopify's product CSV import format: every variant of each included product, with its current price, compare-at price, title, option names and values, and SKU. Treat this CSV as a last-resort snapshot: before importing it in Shopify Admin with "Overwrite products with matching handles", test a single-product copy (header row plus one product's rows) first to verify its variants and prices. Inside the SafeRevert app you don't need CSV imports: SafeRevert restores prices itself when a sale ends.</p>
               <textarea id="backup-output" class="code" rows="7" wrap="off" readonly spellcheck="false" aria-describedby="backup-help backup-note"></textarea>
               <p class="help" id="backup-note" aria-live="polite"></p>
               <div class="button-row">
@@ -889,7 +889,7 @@
             <dd>Every day, including Black Friday to Cyber Monday: 10:00–24:00 Central European Time (Belgrade), which is 04:00–18:00 US Eastern. Outside these hours your scheduled sales still start and end on their own, and ending a sale or restoring all prices works in the app at any time.</dd>
           </div>
           <div><dt>Hosting</dt><dd>Railway, in Amsterdam, Netherlands (EU)</dd></div>
-          <div><dt>Access to your store</dt><dd>Read and edit products only. SafeRevert can't see orders or customers.</dd></div>
+          <div><dt>Access to your store</dt><dd>Read and edit products, and read inventory (variant unit cost only). SafeRevert can't see orders or customers.</dd></div>
           <div><dt>What SafeRevert stores</dt><dd>Product and variant IDs, SKUs, URL handles, prices and unit costs, a price record for the EU 30-day rule, your sales and plan, and the access token Shopify issues to SafeRevert. No customer data.</dd></div>
           <div><dt>Payments</dt><dd>Plans are billed by Shopify. SafeRevert never sees your payment details.</dd></div>
           <div>
